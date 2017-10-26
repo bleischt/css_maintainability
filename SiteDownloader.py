@@ -6,7 +6,7 @@ class SiteDownloader:
     @staticmethod
     def generate_wget_flags(wait=20, outputFile='', level=3, randomWait=True, 
             convertLinks=True, recursive=True, pageRequisites=True, verbose=False, 
-            adjustExtension=True, noParent=True):
+            adjustExtension=True, noParent=True, acceptList={}, quota='500m'):
         flags = []
 
         flags.append("--wait=" + str(wait))
@@ -28,6 +28,10 @@ class SiteDownloader:
             flags.append("--no-parent")
         if outputFile: 
             flags.append("--output-file='" + outputFile + "'")
+        if acceptList: 
+            flags.append("--accept='" + ','.join(acceptList))
+        if quota: 
+            flags.append("--quota='" + quota)
 
         return flags
 

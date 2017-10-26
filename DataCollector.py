@@ -34,7 +34,10 @@ for website in websites:
         f.write('global_rank=' + str(globalRank))
     print('alexa rank=', globalRank)
     wget_flags = SiteDownloader.generate_wget_flags(noParent=False, verbose=True, 
-        outputFile='wget.log')
+        outputFile='wget.log', wait=10)
+    #accepted_filetypes = {'.html', '.css', '.js'}
+    #wget_flags = SiteDownloader.generate_wget_flags(noParent=False, verbose=True, 
+    #    outputFile='wget.log', accepted_filetypes)
     print('downloading site...')
     SiteDownloader.download_website(website, wget_flags, restrictDomain=True)
     print('...done')
