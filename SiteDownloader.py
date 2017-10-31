@@ -29,9 +29,9 @@ class SiteDownloader:
         if outputFile: 
             flags.append("--output-file='" + outputFile + "'")
         if acceptList: 
-            flags.append("--accept='" + ','.join(acceptList))
+            flags.append("--accept='" + ','.join(acceptList) + "'")
         if quota: 
-            flags.append("--quota='" + quota)
+            flags.append("--quota='" + quota + "'")
 
         return flags
 
