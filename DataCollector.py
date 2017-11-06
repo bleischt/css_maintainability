@@ -1,44 +1,101 @@
-import os, sys
+import os, sys, platform
+import datetime
+import logging, logging.handlers
 from urllib.parse import urlparse
 from Alexa import Alexa
 from SiteDownloader import SiteDownloader
 
+logger = logging.getLogger()
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+logger.addHandler(logging.FileHandler('download.log'))
+
+wget_version = SiteDownloader.get_wget_version()
+python_version = sys.version
+os_version = platform.platform()
+#print(wget_version)
+#print(python_version)
+#print(os_version)
 
 
-if len(sys.argv) != 2:
-    print('Incorrect args. Usage: python3 DataCollector.py <websiteList.txt>')
-    exit() 
-    
+def check_args():
+    if len(sys.argv) != 2:
+        print('Incorrect args. Usage: python3 % <websiteList.txt>', argv[0])
+        exit() 
+
+def write_metadata_file(filename, website, datetime, wget_version, python_version, os_version):
+    #create metadata for this download
+    with open(filename, 'w') as f:
+        f.write('url=' + website + '\n');
+        f.write('datetime=' + str(datetime) + '\n')
+        f.write('wget_version=' + wget_version + '\n')
+        f.write('python_version=' + python_version + '\n')
+        f.write('os_version=' + os_version)
+
+def write_alexa_rank_file(filename, website):
+    globalRank = Alexa.get_global_rank(website)
+    with open(filename, 'w') as f:
+        f.write('global_rank=' + str(globalRank))
+
+
+#website = 'www.connorbatch.com'
+#write_alexa_rank_file('alexa.txt', website)
+#write_metadata_file('meta.txt', website, datetime.datetime.now(), 'wgetttt', 'pythonnn', 'osss')
+#exit()
+
+
+#begin collecting websites + ranks
+check_args()
+
 with open(sys.argv[1], 'r') as f:
     websites = f.readlines()
     websites = [line.strip() for line in websites] 
 
 for website in websites:
     #TODO: website string validation?
+
     #setup and navigate to new directory for current website
-    print('checking for ', website, '...')
+    domain = urlparse(website).netloc.replace('www.', '')
+
+    if not domain:
+        logger.error("couldn't parse domain: <%s>", website)
+        continue
+
+    logger.info('checking for <%s>...', domain)
     rootDirectory = os.getcwd()
-    newDirectory = rootDirectory  + '/' + urlparse(website).netloc.replace('www.', '')
-    #skip already-downloaded websites, in case script fails and reruns
+    newDirectory = rootDirectory  + '/' + domain
+
+    #skip already-downloaded websites
     if os.path.exists(newDirectory):
-        print('found, skipping...')
+        logger.info('found, skipping...')
         continue
     else:
         os.makedirs(newDirectory)
     os.chdir(newDirectory) 
 
-    #collect Alexa rank and download the website at limited depth
-    print('collecting alexa rank...')
-    globalRank = Alexa.get_global_rank(website)
-    with open('alexa_rank.txt', 'w') as f:
-        f.write('global_rank=' + str(globalRank))
-    print('alexa rank=', globalRank)
-    wget_flags = SiteDownloader.generate_wget_flags(noParent=False, verbose=True, 
-        outputFile='wget.log', wait=10)
+    #collect download meta data and write to file
+    write_metadata_file('meta.txt', website, datetime.datetime.now(), wget_version, python_version, os_version)
+
+    #collect Alexa rank and write to file
+    logger.info('collecting alexa rank...')
+    write_alexa_rank_file('alexa_rank.txt', website)
+
+    #specify filetypes to be accepted/rejected while downloading site
     #accepted_filetypes = {'.html', '.css', '.js'}
-    #wget_flags = SiteDownloader.generate_wget_flags(noParent=False, verbose=True, 
-    #    outputFile='wget.log', accepted_filetypes)
-    print('downloading site...')
+    rejected_image_extensions = {'jpeg', 'jfif', 'tiff', 'gif', 'bmp', 'png',
+            'ppm', 'pgm', 'pbm', 'pnm', 'webp', 'hdr', 'heif', 'bat', 
+            'bpg', 'cgm', 'svg'}
+    rejected_archive_extensions = {'zip', 'tar', 'iso', 'mar', 'bz2', 'gz', 
+            'z', '7z', 'dmg', 'rar', 'zipx'}
+    rejected_filetypes = rejected_image_extensions.union(rejected_archive_extensions)
+    #generate wget flags for the current download
+    wget_flags = SiteDownloader.generate_wget_flags(noParent=False, verbose=True, 
+        outputFile='wget.log', rejectList=rejected_filetypes)
+
+    logger.info('downloading site...')
     SiteDownloader.download_website(website, wget_flags, restrictDomain=True)
-    print('...done')
+
+    logger.info('...done')
     os.chdir(rootDirectory)
+
+    #clean up
+
