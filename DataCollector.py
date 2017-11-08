@@ -21,7 +21,7 @@ sys.excepthook = log_except_hook
 wget_version = SiteDownloader.get_wget_version()
 python_version = sys.version
 os_version = platform.platform()
-python_modules = [{pkg.key : pkg.version} for pkg in pip.get_installed_distributions() if pkg.key in set(sys.modules))]
+python_modules = [{pkg.key : pkg.version} for pkg in pip.get_installed_distributions() if pkg.key in set(sys.modules)]
 #print(python_modules)
 #print(wget_version)
 #print(python_version)
