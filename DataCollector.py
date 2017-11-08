@@ -50,6 +50,7 @@ def write_alexa_rank_file(filename, website):
 
 #begin collecting websites + ranks
 check_args()
+logger.info("-----Starting new run at %s-----", datetime.datetime.now())
 
 with open(sys.argv[1], 'r') as f:
     websites = f.readlines()
@@ -101,6 +102,8 @@ for website in websites:
 
     logger.info('...done')
     os.chdir(rootDirectory)
+
+logger.info('Finishing Run on %s\n\n', datetime.datetime.now())
 
     #clean up
 
