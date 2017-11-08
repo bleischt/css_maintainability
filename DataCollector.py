@@ -68,11 +68,13 @@ for website in websites:
     #TODO: website string validation?
 
     #setup and navigate to new directory for current website
-    domain = urlparse(website).netloc.replace('www.', '')
+    parse = urlparse(website)
+    domain = parse.netloc.replace('www.', '')
 
     if not domain:
-        logger.error("couldn't parse domain: <%s>", website)
-        continue
+        logger.debug("couldn't parse domain: <%s>", website)
+        logger.debug("trying the path as it is <%s>", parse.path)
+        domain = parse.path
 
     logger.info('checking for <%s>...', domain)
     rootDirectory = os.getcwd()
@@ -111,7 +113,7 @@ for website in websites:
     logger.info('...done')
     os.chdir(rootDirectory)
 
-logger.info('Finishing Run on %s\n\n', datetime.datetime.now())
+logger.info('-----Finishing Run on %s-----\n\n', datetime.datetime.now())
 
     #clean up
 
