@@ -7,10 +7,10 @@ logger = logging.getLogger()
 class SiteDownloader:
 
     @staticmethod
-    def generate_wget_flags(wait=10, outputFile='', level=3, randomWait=True, 
+    def generate_wget_flags(wait=20, outputFile='', level=3, randomWait=True, 
             convertLinks=True, recursive=True, pageRequisites=True, verbose=False, 
-            adjustExtension=True, noParent=True, acceptList={}, rejectList={}, ,
-            quota='500m', timeout=1200):
+            adjustExtension=True, noParent=True, acceptList={}, rejectList={},
+            quota='500m', timeout=3600, limitRate='60k'):
         flags = []
 
         flags.append("--wait=" + str(wait))
@@ -39,7 +39,9 @@ class SiteDownloader:
         if quota: 
             flags.append("--quota='" + quota + "'")
         if timeout:
-            flags.append("--timeout='" + timeout + "'")
+            flags.append("--timeout='" + str(timeout) + "'")
+        if limitRate:
+            flags.append("--limit-rate='" + limitRate + "'")
 
         return flags
 
@@ -48,11 +50,24 @@ class SiteDownloader:
         command = "wget " + " ".join(flags) 
 
         if restrictDomain:
-            domain = urlparse(url).netloc.replace('www.', '') 
-            command += " --domains=" + domain
+            parse = urlparse(url)
+            if not parse.netloc:
+                logger.error("couldn't restrict domain for %s", url)
+            else:
+                domain = urlparse(url).netloc.replace('www.', '') 
+                command += " --domains=" + domain
         
-        logger.debug(command + ' ' +  url.replace('www.', ''))
-        os.system(command + ' ' + url.replace('www.', ''))
+        command += ' ' + url.replace('www.', '').replace('http://', '')
+        logger.debug(command)
+        #os.system(command)
+
+        try:
+            proc = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True)
+        except subprocess.CalledProcessError as error:
+            logger.error('wget command FAILED...')
+            logger.error(error.output.decode('utf-8'))
+            logger.error('....moving on...')
+
 
     @staticmethod
     def get_wget_version():
