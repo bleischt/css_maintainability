@@ -22,7 +22,7 @@ python_modules = [{pkg.key : pkg.version} for pkg in pip.get_installed_distribut
 
 def check_args():
     if len(sys.argv) != 2:
-        print('Incorrect args. Usage: python3 % <websiteList.txt>', argv[0])
+        print('Incorrect args. Usage: python3 % <websiteList.txt>', sys.argv[0])
         exit() 
 
 def write_metadata_file(filename, website, datetime, wget_version, python_version, python_modules, os_version):
