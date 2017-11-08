@@ -1,5 +1,6 @@
 import os, sys, platform
 import datetime
+import traceback
 import pip
 import logging, logging.handlers
 from urllib.parse import urlparse
@@ -10,6 +11,13 @@ logger = logging.getLogger()
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 logger.addHandler(logging.FileHandler('download.log'))
 
+def log_except_hook(*exc_info):
+    text = "".join(traceback.format_exception(*exc_info))
+    logger.error("Exception halted execution:\n%s", text)
+    logger.error("-----Halting Run on %s-----\n\n", datetime.datetime.now()) 
+
+sys.excepthook = log_except_hook
+slkdjfdslkjflkjflkj
 wget_version = SiteDownloader.get_wget_version()
 python_version = sys.version
 os_version = platform.platform()
