@@ -9,7 +9,8 @@ class SiteDownloader:
     @staticmethod
     def generate_wget_flags(wait=10, outputFile='', level=3, randomWait=True, 
             convertLinks=True, recursive=True, pageRequisites=True, verbose=False, 
-            adjustExtension=True, noParent=True, acceptList={}, rejectList={}, quota='500m'):
+            adjustExtension=True, noParent=True, acceptList={}, rejectList={}, ,
+            quota='500m', timeout=1200):
         flags = []
 
         flags.append("--wait=" + str(wait))
@@ -37,6 +38,8 @@ class SiteDownloader:
             flags.append("--reject='" + ','.join(rejectList) + "'")
         if quota: 
             flags.append("--quota='" + quota + "'")
+        if timeout:
+            flags.append("--timeout='" + timeout + "'")
 
         return flags
 
