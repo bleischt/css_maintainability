@@ -53,7 +53,7 @@ class SiteDownloader:
 
     @staticmethod
     def get_wget_version():
-        return subprocess.check_output(['wget', '--version']).decode('utf-8')
+        return subprocess.check_output(['wget', '--version']).decode('utf-8').split('\n')[0]
 
 
 #print(SiteDownloader.generate_wget_flags(verbose=True, outputFile='wget.log'))
