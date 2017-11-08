@@ -88,10 +88,10 @@ for website in websites:
     #accepted_filetypes = {'.html', '.css', '.js'}
     rejected_image_extensions = {'jpeg', 'jfif', 'tiff', 'gif', 'bmp', 'png',
             'ppm', 'pgm', 'pbm', 'pnm', 'webp', 'hdr', 'heif', 'bat', 
-            'bpg', 'cgm', 'svg'}
+            'bpg', 'cgm', 'svg', 'PNG', 'gif'}
     rejected_archive_extensions = {'zip', 'tar', 'iso', 'mar', 'bz2', 'gz', 
             'z', '7z', 'dmg', 'rar', 'zipx'}
-    rejected_filetypes = rejected_image_extensions.union(rejected_archive_extensions)
+    rejected_filetypes = {'pdf'}.union(rejected_image_extensions).union(rejected_archive_extensions)
     #generate wget flags for the current download
     wget_flags = SiteDownloader.generate_wget_flags(noParent=False, verbose=True, 
         outputFile='wget.log', rejectList=rejected_filetypes)
