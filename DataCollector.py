@@ -1,5 +1,6 @@
 import os, sys, platform
 import datetime
+import pip
 import logging, logging.handlers
 from urllib.parse import urlparse
 from Alexa import Alexa
@@ -12,6 +13,8 @@ logger.addHandler(logging.FileHandler('download.log'))
 wget_version = SiteDownloader.get_wget_version()
 python_version = sys.version
 os_version = platform.platform()
+python_modules = [{pkg.key : pkg.version} for pkg in pip.get_installed_distributions() if pkg.key in set(sys.modules) & set(globals())]
+#print(python_modules)
 #print(wget_version)
 #print(python_version)
 #print(os_version)
@@ -22,14 +25,16 @@ def check_args():
         print('Incorrect args. Usage: python3 % <websiteList.txt>', argv[0])
         exit() 
 
-def write_metadata_file(filename, website, datetime, wget_version, python_version, os_version):
+def write_metadata_file(filename, website, datetime, wget_version, python_version, python_modules, os_version):
     #create metadata for this download
-    with open(filename, 'w') as f:
-        f.write('url=' + website + '\n');
-        f.write('datetime=' + str(datetime) + '\n')
-        f.write('wget_version=' + wget_version + '\n')
-        f.write('python_version=' + python_version + '\n')
-        f.write('os_version=' + os_version)
+    if not os.path.exists(filename):
+        with open(filename, 'w') as f:
+            f.write('url=' + website + '\n');
+            f.write('datetime=' + str(datetime) + '\n')
+            f.write('wget_version=' + wget_version + '\n')
+            f.write('python_version=' + python_version + '\n')
+            f.write('python_modules_versions=' + str(python_modules) + '\n')
+            f.write('os_version=' + os_version)
 
 def write_alexa_rank_file(filename, website):
     globalRank = Alexa.get_global_rank(website)
@@ -73,7 +78,7 @@ for website in websites:
     os.chdir(newDirectory) 
 
     #collect download meta data and write to file
-    write_metadata_file('meta.txt', website, datetime.datetime.now(), wget_version, python_version, os_version)
+    write_metadata_file('meta.txt', website, datetime.datetime.now(), wget_version, python_version, python_modules, os_version)
 
     #collect Alexa rank and write to file
     logger.info('collecting alexa rank...')
