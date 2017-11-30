@@ -33,13 +33,14 @@ def check_args():
         print('Incorrect args. Usage: python3 % <websiteList.txt>', sys.argv[0])
         exit() 
 
-def write_metadata_file(filename, website, datetime, wget_version, python_version, python_modules, os_version):
+def write_metadata_file(filename, website, datetime, wget_version, wget_flags, python_version, python_modules, os_version):
     #create metadata for this download
     if not os.path.exists(filename):
         with open(filename, 'w') as f:
             f.write('url=' + website + '\n');
             f.write('datetime=' + str(datetime) + '\n')
             f.write('wget_version=' + wget_version + '\n')
+            f.write('wget_flags=' + "'" + wget_flags + "'" + '\n')
             f.write('python_version=' + python_version + '\n')
             f.write('python_modules_versions=' + str(python_modules) + '\n')
             f.write('os_version=' + os_version)
@@ -73,7 +74,7 @@ for website in websites:
 
     if not domain:
         logger.debug("couldn't parse domain: <%s>", website)
-        logger.debug("trying the path as it is <%s>", parse.path)
+        logger.debug("doesn't affect anything other than perhaps downloading website when copy already exists", parse.path)
         domain = parse.path
 
     logger.info('checking for <%s>...', domain)
@@ -88,9 +89,6 @@ for website in websites:
         os.makedirs(newDirectory)
     os.chdir(newDirectory) 
 
-    #collect download meta data and write to file
-    write_metadata_file('meta.txt', website, datetime.datetime.now(), wget_version, python_version, python_modules, os_version)
-
     #collect Alexa rank and write to file
     logger.info('collecting alexa rank...')
     write_alexa_rank_file('alexa_rank.txt', website)
@@ -99,16 +97,20 @@ for website in websites:
     #accepted_filetypes = {'.html', '.css', '.js'}
     rejected_image_extensions = {'jpeg', 'jfif', 'tiff', 'gif', 'bmp', 'png',
             'ppm', 'pgm', 'pbm', 'pnm', 'webp', 'hdr', 'heif', 'bat', 
-            'bpg', 'cgm', 'svg', 'PNG', 'gif'}
+            'bpg', 'cgm', 'svg', 'PNG', 'gif', 'ico'}
     rejected_archive_extensions = {'zip', 'tar', 'iso', 'mar', 'bz2', 'gz', 
             'z', '7z', 'dmg', 'rar', 'zipx'}
     rejected_filetypes = {'pdf'}.union(rejected_image_extensions).union(rejected_archive_extensions)
     #generate wget flags for the current download
     wget_flags = SiteDownloader.generate_wget_flags(noParent=False, verbose=True, 
         outputFile='wget.log', rejectList=rejected_filetypes)
+    
+    #collect download meta data and write to file
+    write_metadata_file('meta.txt', website, datetime.datetime.now(), wget_version, wget_flags, python_version, python_modules, os_version)
+
 
     logger.info('downloading site...')
-    SiteDownloader.download_website(website, wget_flags, restrictDomain=True)
+    SiteDownloader.download_website(website, wget_flags)
 
     logger.info('...done')
     os.chdir(rootDirectory)
