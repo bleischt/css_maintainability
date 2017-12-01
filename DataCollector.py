@@ -9,7 +9,7 @@ from SiteDownloader import SiteDownloader
 
 logger = logging.getLogger()
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
-logger.addHandler(logging.FileHandler('download.log'))
+logger.addHandler(logging.FileHandler('{}-download.log'.format(os.getpid())))
 
 def log_except_hook(*exc_info):
     text = "".join(traceback.format_exception(*exc_info))
@@ -40,7 +40,7 @@ def write_metadata_file(filename, website, datetime, wget_version, wget_flags, p
             f.write('url=' + website + '\n');
             f.write('datetime=' + str(datetime) + '\n')
             f.write('wget_version=' + wget_version + '\n')
-            f.write('wget_flags=' + "'" + wget_flags + "'" + '\n')
+            f.write('wget_flags=' + "'" + ' '.join(wget_flags) + "'" + '\n')
             f.write('python_version=' + python_version + '\n')
             f.write('python_modules_versions=' + str(python_modules) + '\n')
             f.write('os_version=' + os_version)
@@ -74,7 +74,7 @@ for website in websites:
 
     if not domain:
         logger.debug("couldn't parse domain: <%s>", website)
-        logger.debug("doesn't affect anything other than perhaps downloading website when copy already exists", parse.path)
+        logger.debug("doesn't affect anything other than perhaps downloading website when copy already exists: <%s>", parse.path)
         domain = parse.path
 
     logger.info('checking for <%s>...', domain)
@@ -102,7 +102,7 @@ for website in websites:
             'z', '7z', 'dmg', 'rar', 'zipx'}
     rejected_filetypes = {'pdf'}.union(rejected_image_extensions).union(rejected_archive_extensions)
     #generate wget flags for the current download
-    wget_flags = SiteDownloader.generate_wget_flags(noParent=False, verbose=True, 
+    wget_flags = SiteDownloader.generate_wget_flags(verbose=True, 
         outputFile='wget.log', rejectList=rejected_filetypes)
     
     #collect download meta data and write to file
