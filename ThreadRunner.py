@@ -12,27 +12,27 @@ def check_args():
     return sys.argv[1], sys.argv[2]
 
 def read_sites(filepath):
-    try:
-        with open(filepath, 'r') as f:
-            sites = f.readlines()
-            sites = [line.strip() for line in sites]
-    except Exception as e:
-        logger.error('problem reading sites list')
-        logger.error(e)
-        exit()
-    
+    sites = []
+    with open(filepath, 'r') as f:
+        sites = f.readlines()
+        sites = [line.strip() for line in sites]
     return sites
 
 def run():
     filepath,directory = check_args() 
     sites = read_sites(filepath)
     print(sites)
+
+    # get the directory of the current script
     scriptDir = os.path.realpath(__file__) #os.path.dirname(sys.argv[0])
     scriptDir = '/'.join(scriptDir.split('/')[:-1])
     print('scriptDir:', scriptDir)
+
+    #calculate the number of sites that should be given to each thread
+    #based on the # of sites and the # of max threads specified
     sites_per_thread = 1
     if len(sites) // max_threads > 0:
-        sites_per_thread  = len(sites) / max_threads
+        sites_per_thread  = len(sites) // max_threads
     print('sites_per_thread:', sites_per_thread)
 
     commands = []
