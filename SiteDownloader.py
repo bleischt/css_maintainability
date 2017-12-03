@@ -3,15 +3,14 @@ import logging
 from urllib.parse import urlparse
 
 logger = logging.getLogger()
-#, limitRate='60k'):
 
 class SiteDownloader:
 
     @staticmethod
     def generate_wget_flags(wait=20, outputFile='', level=3, randomWait=True, 
             convertLinks=True, recursive=True, pageRequisites=True, verbose=False, 
-            adjustExtension=True, spanHosts=True, acceptList={}, rejectList={},
-            quota='5m')
+            adjustExtension=True, spanHosts=True, acceptList={}, rejectList={}, 
+            quota='5m'):
         flags = []
 
         flags.append("--wait=" + str(wait))
@@ -39,8 +38,9 @@ class SiteDownloader:
             flags.append("--reject='" + ','.join(rejectList) + "'")
         if quota: 
             flags.append("--quota='" + quota + "'")
-        if limitRate:
-            flags.append("--limit-rate='" + limitRate + "'")
+        #if limitRate:
+        #    flags.append("--limit-rate='" + limitRate + "'")
+        #, limitRate='60k'):
 
         return flags
 
