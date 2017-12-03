@@ -1,4 +1,5 @@
 import os, sys, subprocess
+import math
 import logging
 
 logger = logging.getLogger()
@@ -32,24 +33,29 @@ def run():
     #based on the # of sites and the # of max threads specified
     sites_per_thread = 1
     if len(sites) // max_threads > 0:
-        sites_per_thread  = len(sites) // max_threads
+        sites_per_thread  = math.ceil(len(sites) / max_threads)
     print('sites_per_thread:', sites_per_thread)
+    print('sites', len(sites))
 
     commands = []
     os.chdir(directory)
-    for index in range(int(len(sites) // sites_per_thread)):
+   
+    print('range: ', math.ceil(len(sites) / sites_per_thread))
+    for index in range(math.ceil(len(sites) / sites_per_thread)):
         temp_file_name = '{}.tmp'.format(index)
         #print('temp_file_name:', temp_file_name)
         with open(temp_file_name, 'w') as f:
             #print('index * sites_per_thread:', index * sites_per_thread)
-            #print('index + 1 * sites_per_thread - 1:', index + 1 * sites_per_thread)
-            f.write('\n'.join(sites[index * sites_per_thread : index + 1 * sites_per_thread]))
+            #print('index + 1 * sites_per_thread - 1:', (index + 1) * sites_per_thread)
+            #print(sites[index * sites_per_thread : (index + 1) * sites_per_thread])
+            f.write('\n'.join(sites[index * sites_per_thread : (index + 1) * sites_per_thread]))
         commands.append('python3.5 {}/DataCollector.py {} &'.format(scriptDir, temp_file_name))
 
-    print([command.replace('\n', ', ') for command in commands])
+    #print([command.replace('\n', ', ') for command in commands])
+    #print(len(sites))
 
-    #for command in commands:
-    #   subprocess.call(command, shell=True) 
+    for command in commands:
+       subprocess.call(command, shell=True) 
 
 
 run()
