@@ -30,7 +30,9 @@ python_modules = [{pkg.key : pkg.version} for pkg in pip.get_installed_distribut
 
 def check_args():
     if len(sys.argv) != 2:
-        print('Incorrect args. Usage: python3 % <websiteList.txt>', sys.argv[0])
+        print('Incorrect args.')
+        print('Usage: python3 {} <websiteList.txt>'.format(sys.argv[0]))
+        print('or: python3 {} <website_URL>'.format(sys.argv[0]))
         exit() 
 
 def write_metadata_file(filename, website, datetime, wget_version, wget_flags, python_version, python_modules, os_version):
@@ -40,7 +42,7 @@ def write_metadata_file(filename, website, datetime, wget_version, wget_flags, p
             f.write('url=' + website + '\n');
             f.write('datetime=' + str(datetime) + '\n')
             f.write('wget_version=' + wget_version + '\n')
-            f.write('wget_flags=' + "'" + ' '.join(wget_flags) + "'" + '\n')
+            f.write('wget_flags=' + ' '.join(wget_flags) + '\n')
             f.write('python_version=' + python_version + '\n')
             f.write('python_modules_versions=' + str(python_modules) + '\n')
             f.write('os_version=' + os_version)
@@ -61,9 +63,12 @@ def write_alexa_rank_file(filename, website):
 check_args()
 logger.info("-----Starting new run at %s-----", datetime.datetime.now())
 
-with open(sys.argv[1], 'r') as f:
-    websites = f.readlines()
-    websites = [line.strip() for line in websites] 
+if '.txt' in sys.argv[1].lower():
+    with open(sys.argv[1], 'r') as f:
+        websites = f.readlines()
+        websites = [line.strip() for line in websites] 
+else:
+    websites = [sys.argv[1]]
 
 for website in websites:
     #TODO: website string validation?
