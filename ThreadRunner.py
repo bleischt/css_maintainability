@@ -21,7 +21,7 @@ def read_sites(filepath):
 def run():
     filepath,directory = check_args() 
     sites = read_sites(filepath)
-    print(sites)
+    #print(sites)
 
     # get the directory of the current script
     scriptDir = os.path.realpath(__file__) #os.path.dirname(sys.argv[0])
@@ -39,17 +39,17 @@ def run():
     os.chdir(directory)
     for index in range(int(len(sites) // sites_per_thread)):
         temp_file_name = '{}.tmp'.format(index)
-        print('temp_file_name:', temp_file_name)
+        #print('temp_file_name:', temp_file_name)
         with open(temp_file_name, 'w') as f:
-            print('index * sites_per_thread:', index * sites_per_thread)
-            print('index + 1 * sites_per_thread - 1:', index + 1 * sites_per_thread)
+            #print('index * sites_per_thread:', index * sites_per_thread)
+            #print('index + 1 * sites_per_thread - 1:', index + 1 * sites_per_thread)
             f.write('\n'.join(sites[index * sites_per_thread : index + 1 * sites_per_thread]))
-        commands.append('python3 {}/DataCollector.py {} &'.format(scriptDir, temp_file_name))
+        commands.append('python3.5 {}/DataCollector.py {} &'.format(scriptDir, temp_file_name))
 
-    print(commands)
+    print([command.replace('\n', ', ') for command in commands])
 
-    for command in commands:
-       subprocess.call(command, shell=True) 
+    #for command in commands:
+    #   subprocess.call(command, shell=True) 
 
 
 run()
