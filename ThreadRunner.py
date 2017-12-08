@@ -42,7 +42,7 @@ def run():
    
     print('range: ', math.ceil(len(sites) / sites_per_thread))
     for index in range(math.ceil(len(sites) / sites_per_thread)):
-        temp_file_name = '{}.tmp'.format(index)
+        temp_file_name = '{}.txt.tmp'.format(index)
         #print('temp_file_name:', temp_file_name)
         with open(temp_file_name, 'w') as f:
             #print('index * sites_per_thread:', index * sites_per_thread)
