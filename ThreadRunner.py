@@ -4,7 +4,7 @@ import logging
 
 logger = logging.getLogger()
 
-max_threads = 100
+max_threads = 20
 
 def check_args():
     if len(sys.argv) != 3:
