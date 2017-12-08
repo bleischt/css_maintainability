@@ -4304,24 +4304,6 @@ sportmedia.mk
 milgard.com
 shahrad.net
 card.com
-Dropobironkenobi
-DropDustin Currie
-Dropgreggles
-Dropchrisjlee
-Dropajzz
-Dropc4rl
-Dropmike.roberts
-Dropmbrandon
-DropDrupal User 1237848
-DropDrupal User 143172
-DropDrupal User 2980547
-DropDrupal User 2980545
-DropDrupal User 91990
-DropDrupal User 3076459
-DropDrupal User 128191
-DropDrupal User 60422
-DropDrupal User 512894
-DropDrupal User 3176333
 homeanddecor.com.sg
 psychiatryonline.it
 rifey.ru
@@ -8927,7 +8909,6 @@ cuesa.org
 cdu.de
 songmoi.vn
 bonvivani.sk
-DropDrupal User 2677269
 soultracks.com
 csjoaopaulo2.pt
 ransomedheart.com
