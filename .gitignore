@@ -104,3 +104,4 @@ ENV/
 test
 *.swp
 sites
+cssnose/
