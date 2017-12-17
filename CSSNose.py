@@ -1,51 +1,83 @@
-import os, sys
+import os, sys, shutil
 import http.server, socketserver
 import threading
+import time
 import logging
+import subprocess
 
 logger = logging.getLogger()
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 logger.addHandler(logging.FileHandler('cssnose.log'))
 
 def check_args():
-    if len(sys.argv) != 2:
-        print('Incorrect args. Usage: python3 % <pathToWebsites>', argv[0]) 
+    if len(sys.argv) != 3 and len(sys.argv) != 4:
+        print('Incorrect args. Usage: python3 {} <pathToWebsites> <pathToJar> optional:<siteList.txt>'.format(sys.argv[0])) 
         exit()
 
+def read_sites(filepath):
+    sites = []
+    with open(filepath, 'r') as f:
+       sites = f.readlines()
+       sites = [line.strip() for line in sites]
+    return sites
+
 check_args()
-sitesDir = sys.argv[1]
+sitesDir = os.path.abspath(sys.argv[1])
+pathToJar = os.path.abspath(sys.argv[2])
+
+#try:
+#    os.chdir(sitesDir)
+#except FileNotFoundError as e:
+#    logger.error('Cannot find path to sites: %s', sitesDir)
+#    exit()
+
+port = 8000
+#print('serving at port', port)
+#handler = http.server.SimpleHTTPRequestHandler
+#httpd = socketserver.TCPServer(("", port), handler) 
+#threading.Thread(target = httpd.serve_forever).start()
+#input('lets see if it works')
+
 try:
-    os.chdir(sitesDir)
+    os.chdir(pathToJar)
 except FileNotFoundError as e:
-    logger.error('Cannot find path to websites: %s', sitesDir)
+    logger.error('Cannot find path to jar: %s', pathToJar)
     exit()
 
 #start code smell collection
-port = 8000
-print('serving at port', port)
-handler = http.server.SimpleHTTPRequestHandler
-httpd = socketserver.TCPServer(("", port), handler) 
+sites = os.listdir(sitesDir)
+if len(sys.argv) == 4:
+    sites = read_sites(sys.argv[3])
 
-for siteDir in list(os.walk(sitesDir))[0][1]:
-    try:
-        os.chdir(os.getcwd() + '/' + siteDir + '/' + siteDir)
-        logger.info('current directory: %s', os.getcwd())
-        threading.Thread(target = httpd.serve_forever).start()
-        wait = input('hit enter')
-        httpd.shutdown()
-        os.chdir('../..')
-    except FileNotFoundError as e:
-        logger.error("couldn't find files to serve: %s", siteDir)
-    except:
-        logger.error('failed trying to serve website: %s', siteDir)
+for siteDir in sites:
+    if os.path.isfile(sitesDir + '/' + siteDir + '/' + 'cilla.txt'):
+        logger.info('already found cilla.txt for %s.....', siteDir)
         continue
-
+    logger.info('current website: %s', siteDir)
     logger.info('feeding website to cssNose...')
+    logger.info('url: %s', 'http://localhost:' + str(port) + '/' + siteDir + '/' + siteDir)
+
     try:
         #run css nose java process here
-        pass
-    except:
+        startTime = time.time()
+        output = subprocess.check_output('java -jar CssNose.jar http://localhost:{}/{}/{}'.format(port, siteDir, siteDir), shell=True, timeout=(60 * 10))
+        finishTime = (time.time() - startTime) / 60
+        shutil.copyfile('CillaOutput/cilla-{}.txt'.format(siteDir), '{}/{}/cilla.txt'.format(sitesDir, siteDir)) 
+        with open('{}/{}/cilla.log'.format(sitesDir, siteDir), 'w') as f:
+            f.write(str(output))
+            f.write('\nfinished in {} minutes'.format(finishTime / 60))
+        logger.info('finished with site: %s', siteDir)
+        logger.info('time to completion: %s', finishTime)
+    except IOError as e:
+        logger.error('cssnose (i think) worked but copying over the output failed: %s', siteDir)
+        logger.error(e)
+    except subprocess.TimeoutExpired as e:
+       logger.error('CSSNose is taking too long, moving on.....')
+       logger.error(e)
+       open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').close()
+    except Exception as e:
         logger.error('failed feeding website to CSSNose java process: %s', siteDir)
-
+        logger.error(e)
+        open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').close()
 
 
