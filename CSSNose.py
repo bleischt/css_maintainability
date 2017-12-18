@@ -45,7 +45,8 @@ except FileNotFoundError as e:
     exit()
 
 #start code smell collection
-sites = os.listdir(sitesDir)
+sites = [domain for domain in os.listdir(sitesDir) if os.path.isdir('{}/{}'.format(sitesDir, domain))]
+
 if len(sys.argv) == 4:
     sites = read_sites(sys.argv[3])
 
@@ -60,7 +61,7 @@ for siteDir in sites:
     try:
         #run css nose java process here
         startTime = time.time()
-        output = subprocess.check_output('java -jar CssNose.jar http://localhost:{}/{}/{}'.format(port, siteDir, siteDir), shell=True, timeout=(60 * 10))
+        output = subprocess.check_output('java -jar CssNose.jar http://localhost:{}/{}/{}'.format(port, siteDir, siteDir), shell=True, timeout=(60 * 15))
         finishTime = (time.time() - startTime) / 60
         shutil.copyfile('CillaOutput/cilla-{}.txt'.format(siteDir), '{}/{}/cilla.txt'.format(sitesDir, siteDir)) 
         with open('{}/{}/cilla.log'.format(sitesDir, siteDir), 'w') as f:
@@ -79,5 +80,6 @@ for siteDir in sites:
         logger.error('failed feeding website to CSSNose java process: %s', siteDir)
         logger.error(e)
         open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').close()
+        time.sleep(5)
 
 
