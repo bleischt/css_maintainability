@@ -105,3 +105,5 @@ test
 *.swp
 sites
 cssnose/
+wappalyzer
+*.swo
