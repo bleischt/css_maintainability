@@ -58,14 +58,25 @@ def run():
             continue
         logger.info('current website: %s', siteDir)
         logger.info('feeding website to cssNose...')
-        logger.info('url: %s', 'http://localhost:' + str(port) + '/' + siteDir + '/' + siteDir)
+        logger.info('url: %s', 'https://localhost:' + str(port) + '/' + siteDir + '/' + siteDir)
 
-        try:
+        #try:
             #run css nose java process here
-            startTime = time.time()
-            command = ['java', '-jar', 'CSSNose.jar', 'http://localhost:{}/{}/{}'.format(port, siteDir, siteDir)]
+        startTime = time.time()
+        command = ['java', '-jar', 'CSSNose.jar', 'http://localhost:{}/{}/{}'.format(port, siteDir, siteDir)]
             #output = subprocess.check_output('java -jar CssNose.jar http://localhost:{}/{}/{}'.format(port, siteDir, siteDir), timeout=(60 * 15))
-            output = subprocess.check_output(command, timeout=(60 * 15))
+            #output = subprocess.check_output(command, timeout=(60 * 15))
+        with subprocess.Popen(command, preexec_fn=os.setsid) as process:
+            try:
+                output = process.communicate(timeout=60*15)[0]
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGINT)
+                output = process.communicate()[0]
+            except Exception as e:
+                logger.error('failed feeding website to CSSNose java process: %s', siteDir)
+                logger.error(e)
+                open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').close()
+        try:
             finishTime = (time.time() - startTime) / 60
             shutil.copyfile('CillaOutput/cilla-{}.txt'.format(siteDir), '{}/{}/cilla.txt'.format(sitesDir, siteDir)) 
             with open('{}/{}/cilla.log'.format(sitesDir, siteDir), 'w') as f:
@@ -74,16 +85,16 @@ def run():
             logger.info('finished with site: %s', siteDir)
             logger.info('time to completion: %s', finishTime)
         except IOError as e:
-            logger.error('cssnose (i think) worked but copying over the output failed: %s', siteDir)
+            logger.error('cssnose finsihed but copying over the output failed: %s', siteDir)
             logger.error(e)
-        except subprocess.TimeoutExpired as e:
-           logger.error('CSSNose is taking too long, moving on.....')
-           logger.error(e)
-           open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').close()
-        except Exception as e:
-            logger.error('failed feeding website to CSSNose java process: %s', siteDir)
-            logger.error(e)
-            open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').close()
+        #except subprocess.TimeoutExpired as e:
+        #   logger.error('CSSNose is taking too long, moving on.....')
+        #   logger.error(e)
+        #   open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').close()
+        #except Exception as e:
+        #    logger.error('failed feeding website to CSSNose java process: %s', siteDir)
+        #    logger.error(e)
+        #    open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').close()
 
         kill_output = ''
         try:
@@ -94,6 +105,9 @@ def run():
             logger.error('failed to kill chromedriver process, or it died naturally')
             logger.error(e)
             logger.error(str(kill_output))
+
+        try:
+
 
         try:
             time.sleep(5)
