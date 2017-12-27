@@ -16,11 +16,15 @@ def readCillaFile(filepath, removeChromeError=True, removeConnectionRefused=True
                  if 'Connection refused' in ff.read():
                     return None
            text = f.read()
-           if not text or removeChromeError and ('chrome-error://chromewebdata/' in text or 'data:' in text):
+           if not text:
                return None
            text = text.replace(' from which:','').replace('(:link, :hover, etc)', '')
            lines = text.split('\n')
            lines = lines[:lines.index('PERCENTAGE: ') + 1]
+           addressLines = [line for line in lines if line.strip().startswith('Address:')]
+           addressLinesText = ' '.join(addressLines)
+           if removeChromeError and ('chrome-error://chromewebdata/' in addressLinesText or 'Address: data:' in addressLinesText):
+               return None
     except IOError as e:
         lines = None
     return lines
