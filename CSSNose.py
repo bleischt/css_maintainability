@@ -5,9 +5,34 @@ import time
 import logging
 import subprocess
 
+import atexit
+
 logger = logging.getLogger()
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 logger.addHandler(logging.FileHandler('cssnose.log'))
+
+from http.server import HTTPServer as BaseHTTPServer, SimpleHTTPRequestHandler
+
+
+class HTTPHandler(SimpleHTTPRequestHandler):
+    """This handler uses server.base_path instead of always using os.getcwd()"""
+    def translate_path(self, path):
+        path = SimpleHTTPRequestHandler.translate_path(self, path)
+        relpath = os.path.relpath(path, os.getcwd())
+        fullpath = os.path.join(self.server.base_path, relpath)
+        return fullpath
+
+class HTTPServer(BaseHTTPServer):
+    """The main server, you pass in base_path which is the path you want to serve requests from"""
+    def __init__(self, base_path, server_address, RequestHandlerClass=HTTPHandler):
+        self.base_path = base_path
+        BaseHTTPServer.__init__(self, server_address, RequestHandlerClass)
+
+def start_serving(port, path):
+    logger.info('serving at port: {}'.format(port))
+    #handler = http.server.SimpleHTTPRequestHandler
+    #httpd = socketserver.TCPServer(("", port), handler) 
+    threading.Thread(target = HTTPServer(path, ("", port)).serve_forever).start()
 
 def check_args():
     if len(sys.argv) != 3 and len(sys.argv) != 4:
@@ -25,20 +50,10 @@ check_args()
 sitesDir = os.path.abspath(sys.argv[1])
 pathToJar = os.path.abspath(sys.argv[2])
 
-#try:
-#    os.chdir(sitesDir)
-#except FileNotFoundError as e:
-#    logger.error('Cannot find path to sites: %s', sitesDir)
-#    exit()
-
-port = 8000
-#print('serving at port', port)
-#handler = http.server.SimpleHTTPRequestHandler
-#httpd = socketserver.TCPServer(("", port), handler) 
-#threading.Thread(target = httpd.serve_forever).start()
-#input('lets see if it works')
 
 def run():
+    port = 8000
+    start_serving(port, sitesDir)
 
     try:
         os.chdir(pathToJar)
@@ -56,6 +71,11 @@ def run():
         if os.path.isfile(sitesDir + '/' + siteDir + '/' + 'cilla.txt'):
             logger.info('already found cilla.txt for %s.....', siteDir)
             continue
+
+        killProcessFromString('CSSNose.jar')
+        killProcessFromString('Chrome')
+        killProcessFromString('chromedriver')
+
         logger.info('current website: %s', siteDir)
         logger.info('feeding website to cssNose...')
         logger.info('url: %s', 'https://localhost:' + str(port) + '/' + siteDir + '/' + siteDir)
@@ -96,26 +116,25 @@ def run():
         #    logger.error(e)
         #    open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').close()
 
-        kill_output = ''
-        try:
-            time.sleep(5)
-            logger.info('killing chromedriver processes...')
-            kill_output = subprocess.check_output("pkill -f chromedriver", shell=True)
-        except Exception as e:
-            logger.error('failed to kill chromedriver process, or it died naturally')
-            logger.error(e)
-            logger.error(str(kill_output))
 
-        try:
+def killProcessFromString(string): 
+    kill_output = ''
+    try:
+        time.sleep(5)
+        logger.info('killing {} processes...'.format(string))
+        command = ['pkill', '-f', string]
+        kill_output = subprocess.check_output(command)
+    except Exception as e:
+        logger.error('failed to kill {} processes, or they died naturally'.format(string))
+        #logger.error(str(kill_output))
+    if kill_output:
+        logger.info(e)
 
+def _cleanup():
+    killProcessFromString('CSSNose.jar')
+    killProcessFromString('Chrome')
+    killProcessFromString('chromedriver')
 
-        try:
-            time.sleep(5)
-            logger.info('killing Chrome processes...')
-            kill_output = subprocess.check_output("pkill -f Chrome", shell=True)
-        except Exception as e:
-            logger.error('failed to kill chrome processes, or they died naturally')
-            logger.error(e)
-            logger.error(str(kill_output))
+atexit.register(_cleanup)
 
 run()
