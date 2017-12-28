@@ -100,7 +100,7 @@ for website in websites:
 
     #specify filetypes to be accepted/rejected while downloading site
     #accepted_filetypes = {'.html', '.css', '.js'}
-    rejected_image_extensions = {'jpeg', 'jfif', 'tiff', 'gif', 'bmp', 'png',
+    rejected_image_extensions = {'jpeg', 'jpg', 'jfif', 'tiff', 'gif', 'bmp', 'png',
             'ppm', 'pgm', 'pbm', 'pnm', 'webp', 'hdr', 'heif', 'bat', 
             'bpg', 'cgm', 'svg', 'PNG', 'gif', 'ico'}
     rejected_archive_extensions = {'zip', 'tar', 'iso', 'mar', 'bz2', 'gz', 
