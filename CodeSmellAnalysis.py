@@ -38,6 +38,7 @@ def loadCodeSmells(sitesDir):
         smells = CodeSmellParser.readCodeSmells('{}/{}'.format(absSiteDir, siteDir), removeConnectionRefused=False)
         if len(smells) > 0:
             framesToSmells[siteDir] = smells
+            print(siteDir + ':', len(smells))
     return framesToSmells
 
 #return a numpy array of unlabled code smell arrays
@@ -47,7 +48,7 @@ def getUnlabeledDataArray(framesToSmells):
     for smell in sitesToSmells:
         smellDics.extend(list(smell.values()))
     smells = [list(smell.values()) for smell in smellDics]
-    print(smells)
+    #print(smells)
     return np.array(smells)
 
 def getLabeledData(framesToSmells):
@@ -100,20 +101,24 @@ def visualize_kmeans(data, numClusters, title):
     plt.yticks(())
     plt.show()
 
-def run_kmeans(framesToSmells, numClusters):
+def run_kmeans(framesToSmells, numClusters, visualization=False):
     data = getUnlabeledDataArray(framesToSmells)
     data_scaled = scaleData(data)
     kmeans = KMeans(n_clusters=numClusters)
     kmeans.fit(data_scaled)
     print('labels:', kmeans.labels_)
     print('cluster centers:', kmeans.cluster_centers_)
+    print('score:', kmeans.score())
+    if visualization:
+        visualize_kmeans(data_scaled, numClusters, 'Code Smell Cluster')
+
 
 def visualize_tree(clf):
     dot_data = tree.export_graphviz(clf, out_file=None)
     graph = graphviz.Source(dot_data)
     graph.render("smells")
 
-def run_decision_tree(framesToSmells):
+def run_decision_tree(framesToSmells, visualization=False):
     features,labels = getLabeledData(framesToSmells)
     features_scaled = scaleData(features)
     features_train,features_test,labels_train,labels_test = train_test_split(
@@ -121,14 +126,15 @@ def run_decision_tree(framesToSmells):
     clf = tree.DecisionTreeClassifier()
     clf.fit(features_train, labels_train)
     print(clf.score(features_test, labels_test))
-    visualize_tree(clf)
+    if visualization:
+        visualize_tree(clf)
 
 
 def main():
     sitesDir = checkArgs()
     framesToSmells = loadCodeSmells(sitesDir)
-    #run_kmeans(data_scaled, 3)
-    run_decision_tree(framesToSmells)
+    run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=False)
+    #run_decision_tree(framesToSmells, visualization=True)
 
 main()
 
