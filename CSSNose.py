@@ -96,7 +96,8 @@ def run():
                 logger.error('expired after {} minutes'.format(te.timeout / 60))
                 os.killpg(process.pid, signal.SIGINT)
                 output = process.communicate()[0]
-                open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w').write("timeout: {}".format(te.timeout)).close()
+                with open('{}/{}/cilla.txt'.format(sitesDir, siteDir), 'w') as f:
+                    f.write("timeout: {}".format(te.timeout))
                 with open("timed_out_sites.txt", "a") as myfile:
                     myfile.write(siteDir)
             except Exception as e:
