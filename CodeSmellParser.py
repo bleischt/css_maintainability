@@ -16,7 +16,7 @@ def readCillaFile(filepath, removeChromeError=True, removeConnectionRefused=True
                  if 'Connection refused' in ff.read():
                     return None
            text = f.read()
-           if not text:
+           if not text or 'PERCENTAGE:' not in text:
                return None
            text = text.replace(' from which:','').replace('(:link, :hover, etc)', '')
            lines = text.split('\n')
