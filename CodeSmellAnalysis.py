@@ -1,10 +1,12 @@
 import os, sys
+from collections import defaultdict
 
 import CodeSmellParser
 
 import numpy as np
 import matplotlib.pyplot as plt
 import graphviz
+from prettytable import PrettyTable
 
 from sklearn.cluster import KMeans
 from sklearn import tree
@@ -60,6 +62,71 @@ def getLabeledData(framesToSmells):
             labels.append(framework)
     return np.array(features),np.array(labels)
 
+
+def outputLatexTable(framesToSmells):
+    smell_frame_avg = calcFrameworkMeansAndDeviation(framesToSmells)
+    frameworks = list(list(smell_frame_avg.values())[0].keys())
+    rows = []
+    for smell,frameToAvg in smell_frame_avg.items():
+        row = [smell]
+        for frame in frameworks:
+            avgs = frameToAvg[frame]
+            row.extend([str(avgs['mean']), str(avgs['standard_deviation'])])
+        rows.append(row)
+
+    print(rows)
+    column_structure = ['|c' for i in range(len(frameworks) * 2 + 1)]
+    column_structure[-1] += '|'
+    table = "\\begin{figure}\n\\begin{center}\n\\begin{tabular}{ " 
+    table += ''.join(column_structure) + " }\n\\cline{2-" + str(len(frameworks) * 2 + 1) + "}\n"
+    table += "\multicolumn{1}{}{} & "
+    table += ' & '.join(["\multicolumn{2}{|c|}{" + frame + "}" for frame in frameworks])
+    table += ' \\\\\n\\hline\nCode Smell & '
+    table += ' & '.join(['mean & std-dev' for frame in frameworks])
+    table += ' \\\\\n\\hline\n'
+    table += '\\\\\n'.join([' & '.join(row) for row in rows]) + ' \\\\\n\\hline\n'
+    table += '\\end{tabular}\n\\end{center}\n\\end{figure}\n'
+
+    print(table)
+    return table
+
+def meanTable(framesToSmells):
+    smell_frame_avg = calcFrameworkMeansAndDeviation(framesToSmells)
+    frameworks = list(list(smell_frame_avg.values())[0].keys())
+    subColHeaders = ['smellName']
+    smellToAvg = defaultdict(list)
+    for frame in frameworks:
+        subColHeaders.append(frame + '-mean')
+        subColHeaders.append(frame + '-std-dev')
+
+    table = PrettyTable(colHeaders)
+    for smell,frameToAvg in smell_frame_avg.items():
+        row = [smell]
+        for frame in frameworks:
+            avgs = frameToAvg[frame]
+            row.extend([avgs['mean'], avgs['standard_deviation']])
+        table.add_row(row) 
+
+
+def calcFrameworkMeansAndDeviation(framesToSmells):
+    smell_frame_values = aggregateSmells(framesToSmells)
+    smell_frame_avg = defaultdict(lambda:defaultdict(dict))
+    for smell,framesToValues in smell_frame_values.items():
+        for frame,valueList in framesToValues.items():
+            array = np.array([value for value in list(valueList)])
+            smell_frame_avg[smell][frame] = {'mean': array.mean(), 'standard_deviation': array.std()} 
+    return smell_frame_avg
+
+#transform structure of code smell data from framework->website->>smellName->>>smellValue
+#to smellName->framework->>list(smellValue)
+def aggregateSmells(framesToSmells):
+    smell_frame_values = defaultdict(lambda: defaultdict(list))
+    for frame,smells in framesToSmells.items():    
+        for smellList in smells.values():         
+                for name, value in smellList.items():
+                    smell_frame_values[name][frame].append(value)
+    return smell_frame_values 
+
 def scaleData(data):
     return preprocessing.scale(data)
 
@@ -108,7 +175,6 @@ def run_kmeans(framesToSmells, numClusters, visualization=False):
     kmeans.fit(data_scaled)
     print('labels:', kmeans.labels_)
     print('cluster centers:', kmeans.cluster_centers_)
-    print('score:', kmeans.score())
     if visualization:
         visualize_kmeans(data_scaled, numClusters, 'Code Smell Cluster')
 
@@ -129,11 +195,18 @@ def run_decision_tree(framesToSmells, visualization=False):
     if visualization:
         visualize_tree(clf)
 
+def getTestSmells():
+    return {'cakephp': {'www.me.com': {'smell1': 2, 'smell2': 3}, 'www.mario.com': {'smell1': 5, 'smell2': 3}}, 'django': {'www.you.com' : {'smell1': 4, 'smell2': 91}, 'www.luigi.com': {'smell1': 8, 'smell2': 0}}}
 
 def main():
     sitesDir = checkArgs()
-    framesToSmells = loadCodeSmells(sitesDir)
-    run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=False)
+    #framesToSmells = loadCodeSmells(sitesDir)
+    framesToSmells = getTestSmells()
+    #smells = list(list(framesToSmells.values())[0].values())[0].keys()
+    #print(smells)
+    #meanTable(framesToSmells)
+    outputLatexTable(framesToSmells)
+    #run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=False)
     #run_decision_tree(framesToSmells, visualization=True)
 
 main()
