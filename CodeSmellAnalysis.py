@@ -1,5 +1,7 @@
 import os, sys
+
 from collections import defaultdict
+import math
 
 import CodeSmellParser
 
@@ -10,6 +12,7 @@ from prettytable import PrettyTable
 
 from sklearn.cluster import KMeans
 from sklearn import tree
+from sklearn.linear_model import LogisticRegression
 from sklearn.decomposition import PCA
 from sklearn import preprocessing 
 from sklearn import metrics
@@ -43,25 +46,28 @@ def loadCodeSmells(sitesDir):
             print(siteDir + ':', len(smells))
     return framesToSmells
 
-#return a numpy array of unlabled code smell arrays
-def getUnlabeledDataArray(framesToSmells):
-    sitesToSmells = list(framesToSmells.values())
-    smellDics = []
-    for smell in sitesToSmells:
-        smellDics.extend(list(smell.values()))
-    smells = [list(smell.values()) for smell in smellDics]
-    #print(smells)
-    return np.array(smells)
+#returns a numpy array of unlabled code smell feature sets
+#feature order is preserved over each feature set, sorted lexicographically
+#example: [[1, 4, 2], [3, 8, 5], ...], where 1 & 3 are values for the same feature
+def getUnlabeledData(framesToSmells):
+    return getFeaturesAndCorrespondingLabels_(framesToSmells)[0]
 
+#returns a tuple of a feature array and label array
+#each is a numpy array, each feature set corresponds by ordinally to each label
+#feature order is preserved over each feature set, sorted lexicographically
+#example: ([[1, 4, 2], [3, 8, 5], ...], [framework1, framework2, ...])
 def getLabeledData(framesToSmells):
+    return getFeaturesAndCorrespondingLabels_(framesToSmells)
+    
+def getFeaturesAndCorrespondingLabels_(framesToSmells):
     features = []
     labels = []
     for framework,smells in framesToSmells.items():
         for smell in smells.values():
-            features.append(list(smell.values()))
+            smellTuples = sorted(list(smell.items())) #sort dict items to ensure same order
+            features.append([value for smell,value in smellTuples])
             labels.append(framework)
     return np.array(features),np.array(labels)
-
 
 def outputLatexTable(framesToSmells):
     smell_frame_avg = calcFrameworkMeansAndDeviation(framesToSmells)
@@ -71,15 +77,14 @@ def outputLatexTable(framesToSmells):
         row = [smell]
         for frame in frameworks:
             avgs = frameToAvg[frame]
-            row.extend([str(avgs['mean']), str(avgs['standard_deviation'])])
+            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['standard_deviation'], 2))])
         rows.append(row)
 
-    print(rows)
     column_structure = ['|c' for i in range(len(frameworks) * 2 + 1)]
     column_structure[-1] += '|'
     table = "\\begin{figure}\n\\begin{center}\n\\begin{tabular}{ " 
     table += ''.join(column_structure) + " }\n\\cline{2-" + str(len(frameworks) * 2 + 1) + "}\n"
-    table += "\multicolumn{1}{}{} & "
+    table += "\multicolumn{1}{c}{} & "
     table += ' & '.join(["\multicolumn{2}{|c|}{" + frame + "}" for frame in frameworks])
     table += ' \\\\\n\\hline\nCode Smell & '
     table += ' & '.join(['mean & std-dev' for frame in frameworks])
@@ -87,7 +92,6 @@ def outputLatexTable(framesToSmells):
     table += '\\\\\n'.join([' & '.join(row) for row in rows]) + ' \\\\\n\\hline\n'
     table += '\\end{tabular}\n\\end{center}\n\\end{figure}\n'
 
-    print(table)
     return table
 
 def meanTable(framesToSmells):
@@ -99,14 +103,14 @@ def meanTable(framesToSmells):
         subColHeaders.append(frame + '-mean')
         subColHeaders.append(frame + '-std-dev')
 
-    table = PrettyTable(colHeaders)
+    table = PrettyTable(subColHeaders)
     for smell,frameToAvg in smell_frame_avg.items():
         row = [smell]
         for frame in frameworks:
             avgs = frameToAvg[frame]
-            row.extend([avgs['mean'], avgs['standard_deviation']])
+            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['standard_deviation'], 2))])
         table.add_row(row) 
-
+    print(table)
 
 def calcFrameworkMeansAndDeviation(framesToSmells):
     smell_frame_values = aggregateSmells(framesToSmells)
@@ -169,7 +173,7 @@ def visualize_kmeans(data, numClusters, title):
     plt.show()
 
 def run_kmeans(framesToSmells, numClusters, visualization=False):
-    data = getUnlabeledDataArray(framesToSmells)
+    data = getUnlabeledData(framesToSmells)
     data_scaled = scaleData(data)
     kmeans = KMeans(n_clusters=numClusters)
     kmeans.fit(data_scaled)
@@ -178,6 +182,23 @@ def run_kmeans(framesToSmells, numClusters, visualization=False):
     if visualization:
         visualize_kmeans(data_scaled, numClusters, 'Code Smell Cluster')
 
+
+def run_logistic_regression(framesToSmells):
+    smellNames = sorted(list(list(framesToSmells.values())[0].values())[0].keys())
+    features,labels = getLabeledData(framesToSmells)
+    features_scaled = scaleData(features)
+    features_train,features_test,labels_train,labels_test = train_test_split(
+            features_scaled, labels, test_size=0.33)
+    logreg = LogisticRegression()
+    #logreg = LogisticRegression(multi_class='multinomial', solver='saga')
+    logreg.fit(features_train, labels_train)
+    coefs = logreg.coef_
+    for classIndex,target in enumerate(logreg.classes_):
+        print('class:', target)
+        for smellIndex,smell in enumerate(smellNames):
+            print('\t{}: {}'.format(smell, round(math.exp(coefs[classIndex][smellIndex]), 4)))
+    print('intercept:', logreg.intercept_)
+    print('score:', logreg.score(features_test, labels_test))
 
 def visualize_tree(clf):
     dot_data = tree.export_graphviz(clf, out_file=None)
@@ -196,7 +217,10 @@ def run_decision_tree(framesToSmells, visualization=False):
         visualize_tree(clf)
 
 def getTestSmells():
-    return {'cakephp': {'www.me.com': {'smell1': 2, 'smell2': 3}, 'www.mario.com': {'smell1': 5, 'smell2': 3}}, 'django': {'www.you.com' : {'smell1': 4, 'smell2': 91}, 'www.luigi.com': {'smell1': 8, 'smell2': 0}}}
+    import pprint
+    framesToSmells = {'cakephp': {'www.bowser.com': {'smell1': 2, 'smell2': 3}, 'www.mario.com': {'smell1': 5, 'smell2': 3}, 'www.peach.com': {'smell1': 18, 'smell2': 28}}, 'django': {'www.wario.com' : {'smell1': 4, 'smell2': 91}, 'www.luigi.com': {'smell1': 8, 'smell2': 0}, 'www.dasiy.com': {'smell1': 0, 'smell2':1002}}}
+    pprint.pprint(framesToSmells)
+    return framesToSmells
 
 def main():
     sitesDir = checkArgs()
@@ -204,11 +228,12 @@ def main():
     framesToSmells = getTestSmells()
     #smells = list(list(framesToSmells.values())[0].values())[0].keys()
     #print(smells)
-    #meanTable(framesToSmells)
-    outputLatexTable(framesToSmells)
-    #run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=False)
+    meanTable(framesToSmells)
+    #outputLatexTable(framesToSmells)
+    run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=False)
     #run_decision_tree(framesToSmells, visualization=True)
-
+    #run_logistic_regression(framesToSmells)
+    #calcFrameworkMeansAndDeviation(framesToSmells)
 main()
 
 #sitesDir = checkArgs()
