@@ -121,6 +121,23 @@ def calcFrameworkMeansAndDeviation(framesToSmells):
             smell_frame_avg[smell][frame] = {'mean': array.mean(), 'standard_deviation': array.std()} 
     return smell_frame_avg
 
+def get_smell_vectors(smell_frame_avg):
+    vectors = []
+    for smell,frames in smell_frame_avg.items():
+        means = [avgDict['mean'] for frame,avgDict in sorted(list(frames.items()))]
+        vectors.append(means) 
+    return vectors
+
+def get_framework_vectors(smell_frame_avg):
+    vectors = []
+    frames = list(smell_frame_avg.values())[0].keys()
+    for frame in frames:
+        means = []
+        for smell in smell_frame_avg.keys():
+            means.append(smell_frame_avg[smell][frame]['mean'])
+        vectors.append(means)
+    return vectors
+        
 #transform structure of code smell data from framework->website->>smellName->>>smellValue
 #to smellName->framework->>list(smellValue)
 def aggregateSmells(framesToSmells):
@@ -172,16 +189,23 @@ def visualize_kmeans(data, numClusters, title):
     plt.yticks(())
     plt.show()
 
-def run_kmeans(framesToSmells, numClusters, visualization=False):
-    data = getUnlabeledData(framesToSmells)
-    data_scaled = scaleData(data)
+def run_kmeans(data, numClusters, visualization=False):
     kmeans = KMeans(n_clusters=numClusters)
     kmeans.fit(data_scaled)
     print('labels:', kmeans.labels_)
     print('cluster centers:', kmeans.cluster_centers_)
     if visualization:
         visualize_kmeans(data_scaled, numClusters, 'Code Smell Cluster')
+    return kmeans
 
+def run_kmeans_determine_clusters(data, minClusters=2, maxClusters=10):
+    for n_clusters in range(minClusters, maxClusters+1):
+        kmeans = KMeans(n_clusters=n_clusters)
+        #print(data)
+        kmeans.fit(data)
+        labels = kmeans.labels_
+        silhouette_avg = metrics.silhouette_score(data, labels, metric='euclidean')
+        print('for {} clusters, avg silhouette score is: {}'.format(n_clusters, silhouette_avg))
 
 def run_logistic_regression(framesToSmells):
     smellNames = sorted(list(list(framesToSmells.values())[0].values())[0].keys())
@@ -224,16 +248,23 @@ def getTestSmells():
 
 def main():
     sitesDir = checkArgs()
-    #framesToSmells = loadCodeSmells(sitesDir)
-    framesToSmells = getTestSmells()
+    framesToSmells = loadCodeSmells(sitesDir)
+    data = getUnlabeledData(framesToSmells)
+    data_scaled = scaleData(data)
+    #framesToSmells = getTestSmells()
     #smells = list(list(framesToSmells.values())[0].values())[0].keys()
     #print(smells)
-    meanTable(framesToSmells)
+    #meanTable(framesToSmells)
     #outputLatexTable(framesToSmells)
-    run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=False)
-    #run_decision_tree(framesToSmells, visualization=True)
+    #run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=False)
+    run_decision_tree(framesToSmells, visualization=False)
     #run_logistic_regression(framesToSmells)
-    #calcFrameworkMeansAndDeviation(framesToSmells)
+    #averages = calcFrameworkMeansAndDeviation(framesToSmells)
+    #vectors = get_smell_vectors(averages)
+    #vectors = get_framework_vectors(averages)
+    #data_scaled = scaleData(vectors)
+    #run_kmeans_determine_clusters(data_scaled)
+    #TODO: don't cluster scaled means!!!!!!!!!!!!!
 main()
 
 #sitesDir = checkArgs()
