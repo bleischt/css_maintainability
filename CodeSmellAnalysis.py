@@ -15,12 +15,25 @@ from sklearn.decomposition import PCA
 from sklearn import preprocessing 
 from sklearn.model_selection import train_test_split
 
+from sklearn.neural_network import MLPClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.gaussian_process.kernels import RBF
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+
 from sklearn import metrics
 from sklearn.metrics import silhouette_samples, silhouette_score
 
 import graphviz
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+
+from sklearn.cluster import AgglomerativeClustering
+import ete3
 
 np.random.seed(42)
 
@@ -76,22 +89,23 @@ def getFeaturesAndCorrespondingLabels_(framesToSmells):
 def outputLatexTable(framesToSmells):
     smell_frame_avg = calcFrameworkAverages(framesToSmells)
     frameworks = list(list(smell_frame_avg.values())[0].keys())
+    frameworks = frameworks[4:]
     rows = []
     for smell,frameToAvg in smell_frame_avg.items():
         row = [smell]
         for frame in frameworks:
             avgs = frameToAvg[frame]
-            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['standard_deviation'], 2))])
+            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['standard_deviation'], 2)), str(round(avgs['median'], 2)), str(round(avgs['percent'], 2) * 100) + '\%'])
         rows.append(row)
 
-    column_structure = ['|c' for i in range(len(frameworks) * 2 + 1)]
+    column_structure = ['|c' for i in range(len(frameworks) * 4 + 1)]
     column_structure[-1] += '|'
     table = "\\begin{figure}\n\\begin{center}\n\\begin{tabular}{ " 
     table += ''.join(column_structure) + " }\n\\cline{2-" + str(len(frameworks) * 2 + 1) + "}\n"
     table += "\multicolumn{1}{c}{} & "
-    table += ' & '.join(["\multicolumn{2}{|c|}{" + frame + "}" for frame in frameworks])
+    table += ' & '.join(["\multicolumn{4}{|c|}{" + frame + "}" for frame in frameworks])
     table += ' \\\\\n\\hline\nCode Smell & '
-    table += ' & '.join(['mean & std-dev' for frame in frameworks])
+    table += ' & '.join(['mean & std-dev & med & \%' for frame in frameworks])
     table += ' \\\\\n\\hline\n'
     table += '\\\\\n'.join([' & '.join(row) for row in rows]) + ' \\\\\n\\hline\n'
     table += '\\end{tabular}\n\\end{center}\n\\end{figure}\n'
@@ -131,20 +145,23 @@ def calcFrameworkAverages(framesToSmells):
 
 def get_smell_vectors(smell_frame_avg):
     vectors = []
-    for smell,frames in smell_frame_avg.items():
+    labels = []
+    for smell,frames in sorted(list(smell_frame_avg.items())):
+        labels.append(smell)
+        print(smell)
         means = [avgDict['mean'] for frame,avgDict in sorted(list(frames.items()))]
         vectors.append(means) 
-    return vectors
+    return vectors,labels
 
 def get_framework_vectors(smell_frame_avg):
     vectors = []
-    frames = list(smell_frame_avg.values())[0].keys()
+    frames = sorted(list(smell_frame_avg.values())[0].keys())
     for frame in frames:
         means = []
-        for smell in smell_frame_avg.keys():
+        for smell in sorted(list(smell_frame_avg.keys())):
             means.append(smell_frame_avg[smell][frame]['mean'])
         vectors.append(means)
-    return vectors
+    return vectors,frames
         
 #transform structure of code smell data from framework->website->>smellName->>>smellValue
 #to smellName->framework->>list(smellValue)
@@ -365,27 +382,167 @@ def getTestSmells():
     pprint.pprint(framesToSmells)
     return framesToSmells
 
+def classifier_comparison(framesToSmells):
+    data,labels = getLabeledData(framesToSmells)
+    data = scaleData(data)
+
+    names = ["Nearest Neighbors", "Linear SVM", "RBF SVM", "Gaussian Process",
+             "Decision Tree", "Random Forest", "Neural Net", "AdaBoost",
+             "Naive Bayes", "QDA"]
+
+    classifiers = [
+        KNeighborsClassifier(3),
+        SVC(kernel="linear", C=0.025),
+        SVC(gamma=2, C=1),
+        GaussianProcessClassifier(1.0 * RBF(1.0)),
+        DecisionTreeClassifier(max_depth=5),
+        RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1),
+        MLPClassifier(alpha=1),
+        AdaBoostClassifier(),
+        GaussianNB(),
+        QuadraticDiscriminantAnalysis()
+    ]
+
+    data_train, data_test, label_train, label_test = train_test_split(data, labels, test_size=0.33)
+    for name, clf in zip(names, classifiers):
+        clf.fit(data_train, label_train)
+        score = clf.score(data_test, label_test)
+        print('{}: {}'.format(name, score))
+
+def build_Newick_tree(children,n_leaves,X,leaf_labels,spanner):
+    """
+    build_Newick_tree(children,n_leaves,X,leaf_labels,spanner)
+
+    Get a string representation (Newick tree) from the sklearn
+    AgglomerativeClustering.fit output.
+
+    Input:
+        children: AgglomerativeClustering.children_
+        n_leaves: AgglomerativeClustering.n_leaves_
+        X: parameters supplied to AgglomerativeClustering.fit
+        leaf_labels: The label of each parameter array in X
+        spanner: Callable that computes the dendrite's span
+
+    Output:
+        ntree: A str with the Newick tree representation
+
+    """
+    return go_down_tree(children,n_leaves,X,leaf_labels,len(children)+n_leaves-1,spanner)[0]+';'
+
+def go_down_tree(children,n_leaves,X,leaf_labels,nodename,spanner):
+    """
+    go_down_tree(children,n_leaves,X,leaf_labels,nodename,spanner)
+
+    Iterative function that traverses the subtree that descends from
+    nodename and returns the Newick representation of the subtree.
+
+    Input:
+        children: AgglomerativeClustering.children_
+        n_leaves: AgglomerativeClustering.n_leaves_
+        X: parameters supplied to AgglomerativeClustering.fit
+        leaf_labels: The label of each parameter array in X
+        nodename: An int that is the intermediate node name whos
+            children are located in children[nodename-n_leaves].
+        spanner: Callable that computes the dendrite's span
+
+    Output:
+        ntree: A str with the Newick tree representation
+
+    """
+    nodeindex = nodename-n_leaves
+    if nodename<n_leaves:
+        return leaf_labels[nodeindex],np.array([X[nodeindex]])
+    else:
+        node_children = children[nodeindex]
+        branch0,branch0samples = go_down_tree(children,n_leaves,X,leaf_labels,node_children[0],spanner)
+        branch1,branch1samples = go_down_tree(children,n_leaves,X,leaf_labels,node_children[1],spanner)
+        node = np.vstack((branch0samples,branch1samples))
+        branch0span = spanner(branch0samples)
+        branch1span = spanner(branch1samples)
+        nodespan = spanner(node)
+        branch0distance = nodespan-branch0span
+        branch1distance = nodespan-branch1span
+        nodename = '({branch0}:{branch0distance},{branch1}:{branch1distance})'.format(branch0=branch0,branch0distance=branch0distance,branch1=branch1,branch1distance=branch1distance)
+        return nodename,node
+
+def get_cluster_spanner(aggClusterer):
+    """
+    spanner = get_cluster_spanner(aggClusterer)
+
+    Input:
+        aggClusterer: sklearn.cluster.AgglomerativeClustering instance
+
+    Get a callable that computes a given cluster's span. To compute
+    a cluster's span, call spanner(cluster)
+
+    The cluster must be a 2D numpy array, where the axis=0 holds
+    separate cluster members and the axis=1 holds the different
+    variables.
+
+    """
+    if aggClusterer.linkage=='ward':
+        if aggClusterer.affinity=='euclidean':
+            spanner = lambda x:np.sum((x-aggClusterer.pooling_func(x,axis=0))**2)
+    elif aggClusterer.linkage=='complete':
+        if aggClusterer.affinity=='euclidean':
+            spanner = lambda x:np.max(np.sum((x[:,None,:]-x[None,:,:])**2,axis=2))
+        elif aggClusterer.affinity=='l1' or aggClusterer.affinity=='manhattan':
+            spanner = lambda x:np.max(np.sum(np.abs(x[:,None,:]-x[None,:,:]),axis=2))
+        elif aggClusterer.affinity=='l2':
+            spanner = lambda x:np.max(np.sqrt(np.sum((x[:,None,:]-x[None,:,:])**2,axis=2)))
+        elif aggClusterer.affinity=='cosine':
+            spanner = lambda x:np.max(np.sum((x[:,None,:]*x[None,:,:]))/(np.sqrt(np.sum(x[:,None,:]*x[:,None,:],axis=2,keepdims=True))*np.sqrt(np.sum(x[None,:,:]*x[None,:,:],axis=2,keepdims=True))))
+        else:
+            raise AttributeError('Unknown affinity attribute value {0}.'.format(aggClusterer.affinity))
+    elif aggClusterer.linkage=='average':
+        if aggClusterer.affinity=='euclidean':
+            spanner = lambda x:np.mean(np.sum((x[:,None,:]-x[None,:,:])**2,axis=2))
+        elif aggClusterer.affinity=='l1' or aggClusterer.affinity=='manhattan':
+            spanner = lambda x:np.mean(np.sum(np.abs(x[:,None,:]-x[None,:,:]),axis=2))
+        elif aggClusterer.affinity=='l2':
+            spanner = lambda x:np.mean(np.sqrt(np.sum((x[:,None,:]-x[None,:,:])**2,axis=2)))
+        elif aggClusterer.affinity=='cosine':
+            spanner = lambda x:np.mean(np.sum((x[:,None,:]*x[None,:,:]))/(np.sqrt(np.sum(x[:,None,:]*x[:,None,:],axis=2,keepdims=True))*np.sqrt(np.sum(x[None,:,:]*x[None,:,:],axis=2,keepdims=True))))
+        else:
+            raise AttributeError('Unknown affinity attribute value {0}.'.format(aggClusterer.affinity))
+    else:
+        raise AttributeError('Unknown linkage attribute value {0}.'.format(aggClusterer.linkage))
+    return spanner
+
+def dendrogram(data, leaf_labels):
+    clusterer = AgglomerativeClustering(n_clusters=2,compute_full_tree=True) # You can set compute_full_tree to 'auto', but I left it this way to get the entire tree plotted
+    clusterer.fit(data) # X for whatever you want to fit
+    spanner = get_cluster_spanner(clusterer)
+    leaf_labels[leaf_labels.index('LOC(CSS)')] = 'LOC'
+    newick_tree = build_Newick_tree(clusterer.children_,clusterer.n_leaves_,data,leaf_labels,spanner) # leaf_labels is a list of labels for each entry in X
+    tree = ete3.Tree(newick_tree)
+    tree.show()
+
 def main():
     sitesDir = checkArgs()
-    #framesToSmells = loadCodeSmells(sitesDir)
+    framesToSmells = loadCodeSmells(sitesDir)
     #data = getUnlabeledData(framesToSmells)
-    #data_scaled = scaleData(data)
+    #data,labels = getLabeledData(framesToSmells)
+    #data = scaleData(data)
     #plot_silhouettes(data_scaled)
-    framesToSmells = getTestSmells()
+    #framesToSmells = getTestSmells()
     #smells = list(list(framesToSmells.values())[0].values())[0].keys()
     #print(smells)
-    meanTable(framesToSmells)
-    exit()
-    #outputLatexTable(framesToSmells)
+    #meanTable(framesToSmells)
+    #print(outputLatexTable(framesToSmells))
     #run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=False)
     #run_decision_tree(framesToSmells, visualization=False)
     #run_logistic_regression(framesToSmells)
     averages = calcFrameworkAverages(framesToSmells)
-    #vectors = get_smell_vectors(averages)
-    vectors = get_framework_vectors(averages)
-    data_scaled = scaleData(vectors)
-    print(len(data_scaled))
-    run_kmeans_determine_clusters(data_scaled, visualization=True)
+    vectors,labels = get_smell_vectors(averages)
+    #vectors,labels = get_framework_vectors(averages)
+    data = scaleData(vectors)
+    print(len(data))
+    print(labels)
+    dendrogram(data, labels)
+    exit()
+    #run_kmeans_determine_clusters(data_scaled, visualization=True)
+    classifier_comparison(framesToSmells)    
 main()
 
 #sitesDir = checkArgs()
