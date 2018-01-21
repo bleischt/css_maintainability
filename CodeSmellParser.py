@@ -48,19 +48,22 @@ def getCodeSmellsPerSite(sitesDir, sitesList, removeChromeError=True, removeConn
         smells[site] =  extractCodeSmellsFromText(lines)
     return smells
 
-def discardInvalidSmellSets(sitesToSmells):
+def discardInvalidAndUnwantedSmellSets(sitesToSmells, smellsToKeep=None):
     toSave = dict()
     for site,smells in sitesToSmells.items():
         if smells is not None and smells['LOC(CSS)'] != 0: 
-            toSave[site] = smells
+            if smellsToKeep and len(smellsToKeep) > 0:
+                toSave[site] = {smell:value for smell,value in smells.items() if smell in smellsToKeep}
+            else:
+                toSave[site] = smells
     return toSave
 
-def readCodeSmells(sitesDir, removeChromeError=True, removeConnectionRefused=True):
+def readCodeSmells(sitesDir, removeChromeError=True, removeConnectionRefused=True, smellsToKeep=None):
     #sitesDir = checkArgs()
     sites = [name for name in os.listdir(sitesDir) if os.path.isdir('{}/{}'.format(sitesDir, name))]
     sites = [site for site in sites if 'cilla.txt' in os.listdir('{}/{}'.format(sitesDir, site))]
     sitesToSmells = getCodeSmellsPerSite(sitesDir, sites, removeChromeError, removeConnectionRefused)
-    sitesToSmells = discardInvalidSmellSets(sitesToSmells)
+    sitesToSmells = discardInvalidAndUnwantedSmellSets(sitesToSmells, smellsToKeep)
     return sitesToSmells 
 
       
