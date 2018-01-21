@@ -1,7 +1,7 @@
 import os, sys
 
 from collections import defaultdict
-import math
+import math, random
 
 import CodeSmellParser
 
@@ -37,8 +37,12 @@ import matplotlib.cm as cm
 from sklearn.cluster import AgglomerativeClustering
 import ete3
 
-np.random.seed(42)
-
+smell_based = {'InlinedRules', 'EmbeddedRules', 'TooLongRules', 'SelectorswithIDandatleastoneclassorelement', 'PropertieswithValueEqualtoNoneorZero', 'UnusedProperties', 'PropertieswithHard-CodedValues', 'UniversalSelectors', 'TooSpecificSelectorsTypeII', 'TooSpecificSelectorsTypeI', 'DangerousSelectors', 'EmptyCatchRules', 'TooLongRules'}
+metric_based = {'ExternalRules', 'Effective', 'FileswithCSScode', 'LOC(CSS)', 'Ineffective', 'TotalDefinedCSSselectors', 'TotalDefinedCSSrules', 'Matched', 'TotalDefinedCSSProperties', '>UndefinedClasses', 'Unmatched', 'Ignored', 'IgnoredProperties'}
+rule_based = {'InlinedRules', 'EmbeddedRules', 'ExternalRules', 'TooLongRules', 'TotalDefinedCSSrules', 'EmptyCatchRules'}
+selector_based = {'TooSpecificSelectorsTypeI', 'TooSpecificSelectorsTypeII', 'SelectorswithInvalidSyntax', 'DangerousSelectors', 'UniversalSelectors', 'TotalDefinedCSSselectors', 'Ignored', 'SelectorswithIDandatleastoneclassorelement', 'Matched', 'Effective', 'Unmatched', 'Ineffective', '>UndefinedClasses'}
+property_based = {'PropertieswithHard-CodedValues', 'PropertieswithValueEqualtoNoneorZero', 'TotalDefinedCSSProperties', 'UnusedProperties', 'IgnoredProperties'}
+file_based = {'FileswithCSScode', 'LOC(CSS)'}
 
 def checkArgs():
     if len(sys.argv) != 2:
@@ -54,12 +58,12 @@ def printSmellCounts(sitesDir):
 #returns a dict of framework mapped to code smells, where code smells is a dict of 
 #site matched to the smell values for that site
 #example: {'drupal': {'google.com' : [smell1, smell2, ...], 'yahoo.com' : [smell1, ...]}, ... }
-def loadCodeSmells(sitesDir):
+def loadCodeSmells(sitesDir, smellsToKeep=None):
     siteDirs = [name for name in os.listdir(sitesDir) if os.path.isdir('{}/{}'.format(sitesDir, name))]
     absSiteDir = os.path.abspath(sitesDir)
     framesToSmells = dict()
     for siteDir in siteDirs:
-        smells = CodeSmellParser.readCodeSmells('{}/{}'.format(absSiteDir, siteDir), removeConnectionRefused=False)
+        smells = CodeSmellParser.readCodeSmells('{}/{}'.format(absSiteDir, siteDir), removeConnectionRefused=False, smellsToKeep=smellsToKeep)
         if len(smells) > 0:
             framesToSmells[siteDir] = smells
             print(siteDir + ':', len(smells))
@@ -88,18 +92,19 @@ def getFeaturesAndCorrespondingLabels_(framesToSmells):
             labels.append(framework)
     return np.array(features),np.array(labels)
 
+
 def outputLatexTable(framesToSmells):
     smell_frame_avg = calcFrameworkAverages(framesToSmells)
     frameworks = sorted(list(list(smell_frame_avg.values())[0].keys()))
     frameworks = frameworks[:4]
     rows = []
-    numSubColumns = 5
+    numSubColumns = 3
     for smell,frameToAvg in smell_frame_avg.items():
         row = [smell]
         means = preprocessing.scale([frameToAvg[frame]['mean'] for frame in frameworks])
         for index,frame in enumerate(frameworks):
             avgs = frameToAvg[frame]
-            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['median'], 2)), str(round(avgs['standard_deviation'], 2)), str(round(means[index], 2)), str(round(avgs['percent'], 2) * 100) + '\%'])
+            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['standard_deviation'], 2)), str(round(means[index], 2))])
         rows.append(row)
 
     column_structure = ['|c' for i in range(len(frameworks) * numSubColumns + 1)]
@@ -384,20 +389,29 @@ def run_decision_tree(framesToSmells, visualization=False):
     return clf
 
 
-
-def run_neural_net(framesToSmells):
-    #import random
-
+def run_neural_net(framesToSmells, precision_recall=False, crossValidation=None):
     features,labels = getLabeledData(framesToSmells)
+    print(labels)
     features = scaleData(features)
+
     features_train,features_test,labels_train,labels_test = train_test_split(
             features, labels, test_size=0.1)
+
     clf = MLPClassifier(alpha=1)
     #clf.fit(scaleData(features_train), labels_train)
     clf.fit(features_train, labels_train)
     print('score:', clf.score(features_test, labels_test))
-    predict = clf.predict(features_test)
-    print('precision, recall, fscore, support:', precision_recall_fscore_support(predict, labels_test))
+
+    if precision_recall:
+        predict = clf.predict(features_test)
+        print('precision, recall, fscore, support:', precision_recall_fscore_support(predict, labels_test))
+
+    if crossValidation:
+        clf_x = MLPClassifier(alpha=1)
+        scores = cross_val_score(clf_x, features, labels, cv=crossValidation)
+        print('average:', scores.mean())
+        print('scores:', scores)
+
     #for i in range(10):
     #    rand = random.randint(0,len(features_test)-1)
     #    print('actual: {}'.format(labels_test[rand]))
@@ -552,9 +566,55 @@ def dendrogram(data, leaf_labels):
     tree = ete3.Tree(newick_tree)
     tree.show()
 
+def smell_groups(sitesDir):
+    smell_based_smells = loadCodeSmells(sitesDir, smell_based)
+    smells = list(list(smell_based_smells .values())[0].values())[0].keys()
+    print(smells)
+    print('size:', len(smells))
+    metric_based_smells = loadCodeSmells(sitesDir, metric_based)
+    smells = list(list(metric_based_smells .values())[0].values())[0].keys()
+    print(smells)
+    print('size:', len(smells))
+    property_based_smells = loadCodeSmells(sitesDir, property_based)
+    smells = list(list(property_based_smells .values())[0].values())[0].keys()
+    print(smells)
+    print('size:', len(smells))
+    rule_based_smells = loadCodeSmells(sitesDir, rule_based)
+    smells = list(list(rule_based_smells .values())[0].values())[0].keys()
+    print(smells)
+    print('size:', len(smells))
+    selector_based_smells = loadCodeSmells(sitesDir, selector_based)
+    smells = list(list(selector_based_smells.values())[0].values())[0].keys()
+    print(smells)
+    print('size:', len(smells))
+    file_based_smells = loadCodeSmells(sitesDir, file_based)
+    smells = list(list(file_based_smells.values())[0].values())[0].keys()
+    print(smells)
+    print('size:', len(smells))
+
+    print('smell-based:')
+    run_neural_net(smell_based_smells, crossValidation=10)
+    print()
+    print('metric-based:')
+    run_neural_net(metric_based_smells, crossValidation=10)
+    print()
+    print('property-based:')
+    run_neural_net(property_based_smells, crossValidation=10)
+    print()
+    print('rule-based:')
+    run_neural_net(rule_based_smells, crossValidation=10)
+    print()
+    print('selector-based:')
+    run_neural_net(selector_based_smells, crossValidation=10)
+    print()
+    print('file-based:')
+    run_neural_net(file_based_smells, crossValidation=10)
+
+
 def main():
     sitesDir = checkArgs()
-    framesToSmells = loadCodeSmells(sitesDir)
+    smell_groups(sitesDir)
+    #framesToSmells = loadCodeSmells(sitesDir)
     #data = getUnlabeledData(framesToSmells)
     #data,labels = getLabeledData(framesToSmells)
     #data = scaleData(data)
@@ -575,7 +635,7 @@ def main():
     #print(labels)
     #dendrogram(data, labels)
     #run_kmeans_determine_clusters(data, visualization=True, folderName='plots_site')
-    run_neural_net(framesToSmells)
+    #run_neural_net(framesToSmells)
     #classifier_comparison(framesToSmells, crossValidation=10)    
 main()
 
