@@ -12,8 +12,6 @@ from sklearn.cluster import KMeans
 from sklearn import tree
 from sklearn.linear_model import LogisticRegression
 from sklearn.decomposition import PCA
-from sklearn import preprocessing 
-from sklearn.model_selection import train_test_split
 
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -26,7 +24,11 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
 from sklearn import metrics
+from sklearn import preprocessing 
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import silhouette_samples, silhouette_score
+from sklearn.model_selection import cross_val_score
+from sklearn.metrics import precision_recall_fscore_support
 
 import graphviz
 import matplotlib.pyplot as plt
@@ -88,47 +90,51 @@ def getFeaturesAndCorrespondingLabels_(framesToSmells):
 
 def outputLatexTable(framesToSmells):
     smell_frame_avg = calcFrameworkAverages(framesToSmells)
-    frameworks = list(list(smell_frame_avg.values())[0].keys())
-    frameworks = frameworks[4:]
+    frameworks = sorted(list(list(smell_frame_avg.values())[0].keys()))
+    frameworks = frameworks[:4]
     rows = []
+    numSubColumns = 5
     for smell,frameToAvg in smell_frame_avg.items():
         row = [smell]
-        for frame in frameworks:
+        means = preprocessing.scale([frameToAvg[frame]['mean'] for frame in frameworks])
+        for index,frame in enumerate(frameworks):
             avgs = frameToAvg[frame]
-            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['standard_deviation'], 2)), str(round(avgs['median'], 2)), str(round(avgs['percent'], 2) * 100) + '\%'])
+            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['median'], 2)), str(round(avgs['standard_deviation'], 2)), str(round(means[index], 2)), str(round(avgs['percent'], 2) * 100) + '\%'])
         rows.append(row)
 
-    column_structure = ['|c' for i in range(len(frameworks) * 4 + 1)]
+    column_structure = ['|c' for i in range(len(frameworks) * numSubColumns + 1)]
     column_structure[-1] += '|'
-    table = "\\begin{figure}\n\\begin{center}\n\\begin{tabular}{ " 
-    table += ''.join(column_structure) + " }\n\\cline{2-" + str(len(frameworks) * 2 + 1) + "}\n"
+    table = "\\begin{table*}\n\\centering\n\\resizebox{18cm}{!}{\n\\begin{tabular}{ " 
+    table += ''.join(column_structure) + " }\n\\cline{2-" + str(len(frameworks) * numSubColumns + 1) + "}\n"
     table += "\multicolumn{1}{c}{} & "
-    table += ' & '.join(["\multicolumn{4}{|c|}{" + frame + "}" for frame in frameworks])
+    table += ' & '.join(["\multicolumn{" + str(numSubColumns) + "}{|c|}{" + frame + "}" for frame in frameworks])
     table += ' \\\\\n\\hline\nCode Smell & '
-    table += ' & '.join(['mean & std-dev & med & \%' for frame in frameworks])
+    table += ' & '.join(['mean & median & std-dev & z-mean & \%' for frame in frameworks])
     table += ' \\\\\n\\hline\n'
     table += '\\\\\n'.join([' & '.join(row) for row in rows]) + ' \\\\\n\\hline\n'
-    table += '\\end{tabular}\n\\end{center}\n\\end{figure}\n'
+    table += '\\end{tabular}\n}\n\\caption{}\n\\end{table*}\n'
 
     return table
 
 def meanTable(framesToSmells):
     smell_frame_avg = calcFrameworkAverages(framesToSmells)
-    frameworks = list(list(smell_frame_avg.values())[0].keys())
+    frameworks = sorted(list(list(smell_frame_avg.values())[0].keys()))
     subColHeaders = ['smellName']
     smellToAvg = defaultdict(list)
     for frame in frameworks:
         subColHeaders.append(frame + '-mean')
-        subColHeaders.append(frame + '-std-dev')
         subColHeaders.append(frame + '-median')
+        subColHeaders.append(frame + '-std-dev')
+        subColHeaders.append(frame + '-z-score')
         subColHeaders.append(frame + '-%')
 
     table = PrettyTable(subColHeaders)
     for smell,frameToAvg in smell_frame_avg.items():
         row = [smell]
-        for frame in frameworks:
+        means = preprocessing.scale([frameToAvg[frame]['mean'] for frame in frameworks])
+        for index,frame in enumerate(frameworks):
             avgs = frameToAvg[frame]
-            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['standard_deviation'], 2)), str(round(avgs['median'], 2)), str(round(avgs['percent'], 2))])
+            row.extend([str(round(avgs['mean'], 2)), str(round(avgs['median'], 2)), str(round(avgs['standard_deviation'], 2)), str(round(means[index], 2)), str(round(avgs['percent'], 2))])
         table.add_row(row) 
     print(table)
 
@@ -176,7 +182,7 @@ def aggregateSmells(framesToSmells):
 def scaleData(data):
     return preprocessing.scale(data)
 
-def visualize_kmeans(data, numClusters, title):
+def visualize_kmeans(data, numClusters, title, folderName):
     reduced_data = PCA(n_components=2).fit_transform(data)
     kmeans = KMeans(init='k-means++', n_clusters=numClusters)
     kmeans.fit(reduced_data)
@@ -223,7 +229,7 @@ def visualize_kmeans(data, numClusters, title):
     plt.ylim(y_min, y_max)
     plt.xticks(())
     plt.yticks(())
-    plt.savefig('plots/plot-pca{}'.format(numClusters))
+    plt.savefig('{}/plot-pca{}'.format(folderName, numClusters))
     return plt
     #plt.show()
 
@@ -236,19 +242,19 @@ def run_kmeans(data, numClusters, visualization=False):
         visualize_kmeans(data_scaled, numClusters, 'Code Smell Cluster')
     return kmeans
 
-def run_kmeans_determine_clusters(data, minClusters=2, maxClusters=10, visualization=False):
+def run_kmeans_determine_clusters(data, minClusters=2, maxClusters=10, visualization=False, folderName='plots'):
     for n_clusters in range(minClusters, maxClusters+1):
         kmeans = KMeans(n_clusters=n_clusters)
         #print(data)
         kmeans.fit(data)
         if visualization:
             labels = kmeans.labels_
-            plot_silhouettes(data, kmeans, n_clusters)
-            visualize_kmeans(data, n_clusters, 'Framework Cluster')
+            plot_silhouettes(data, kmeans, n_clusters, folderName)
+            visualize_kmeans(data, n_clusters, 'Framework Cluster', folderName)
         silhouette_avg = metrics.silhouette_score(data, labels, metric='euclidean')
         print('for {} clusters, avg silhouette score is: {}'.format(n_clusters, silhouette_avg))
 
-def plot_silhouettes(data, clusterer, n_clusters):
+def plot_silhouettes(data, clusterer, n_clusters, folderName):
     # Generating the sample data from make_blobs
 # This particular setting has one distinct cluster and 3 clusters placed close
 # together.
@@ -341,7 +347,7 @@ def plot_silhouettes(data, clusterer, n_clusters):
           "with n_clusters = %d" % n_clusters),
          fontsize=14, fontweight='bold')
 
-    plt.savefig('plots/plot{}'.format(n_clusters))
+    plt.savefig('{}/plot{}'.format(folderName, n_clusters))
 
 def run_logistic_regression(framesToSmells):
     smellNames = sorted(list(list(framesToSmells.values())[0].values())[0].keys())
@@ -375,6 +381,28 @@ def run_decision_tree(framesToSmells, visualization=False):
     print(clf.score(features_test, labels_test))
     if visualization:
         visualize_tree(clf)
+    return clf
+
+
+
+def run_neural_net(framesToSmells):
+    #import random
+
+    features,labels = getLabeledData(framesToSmells)
+    features = scaleData(features)
+    features_train,features_test,labels_train,labels_test = train_test_split(
+            features, labels, test_size=0.1)
+    clf = MLPClassifier(alpha=1)
+    #clf.fit(scaleData(features_train), labels_train)
+    clf.fit(features_train, labels_train)
+    print('score:', clf.score(features_test, labels_test))
+    predict = clf.predict(features_test)
+    print('precision, recall, fscore, support:', precision_recall_fscore_support(predict, labels_test))
+    #for i in range(10):
+    #    rand = random.randint(0,len(features_test)-1)
+    #    print('actual: {}'.format(labels_test[rand]))
+    #    print('predicted: {}'.format(clf.predict(np.array([features_test[rand]]))))
+    #    print('for:', features_test[rand])
 
 def getTestSmells():
     import pprint
@@ -382,7 +410,7 @@ def getTestSmells():
     pprint.pprint(framesToSmells)
     return framesToSmells
 
-def classifier_comparison(framesToSmells):
+def classifier_comparison(framesToSmells, crossValidation=None):
     data,labels = getLabeledData(framesToSmells)
     data = scaleData(data)
 
@@ -408,6 +436,11 @@ def classifier_comparison(framesToSmells):
         clf.fit(data_train, label_train)
         score = clf.score(data_test, label_test)
         print('{}: {}'.format(name, score))
+        if crossValidation:
+            scores = cross_val_score(clf, data, labels, cv=crossValidation)
+            print('scores:', scores)
+            print('average:', scores.mean())
+            print()
 
 def build_Newick_tree(children,n_leaves,X,leaf_labels,spanner):
     """
@@ -513,7 +546,8 @@ def dendrogram(data, leaf_labels):
     clusterer = AgglomerativeClustering(n_clusters=2,compute_full_tree=True) # You can set compute_full_tree to 'auto', but I left it this way to get the entire tree plotted
     clusterer.fit(data) # X for whatever you want to fit
     spanner = get_cluster_spanner(clusterer)
-    leaf_labels[leaf_labels.index('LOC(CSS)')] = 'LOC'
+    if any("LOC" in s for s in leaf_labels):
+        leaf_labels[leaf_labels.index('LOC(CSS)')] = 'LOC' 
     newick_tree = build_Newick_tree(clusterer.children_,clusterer.n_leaves_,data,leaf_labels,spanner) # leaf_labels is a list of labels for each entry in X
     tree = ete3.Tree(newick_tree)
     tree.show()
@@ -530,19 +564,19 @@ def main():
     #print(smells)
     #meanTable(framesToSmells)
     #print(outputLatexTable(framesToSmells))
-    #run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=False)
+    #run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=True)
     #run_decision_tree(framesToSmells, visualization=False)
     #run_logistic_regression(framesToSmells)
-    averages = calcFrameworkAverages(framesToSmells)
-    vectors,labels = get_smell_vectors(averages)
+    #averages = calcFrameworkAverages(framesToSmells)
+    #vectors,labels = get_smell_vectors(averages)
     #vectors,labels = get_framework_vectors(averages)
-    data = scaleData(vectors)
-    print(len(data))
-    print(labels)
-    dendrogram(data, labels)
-    exit()
-    #run_kmeans_determine_clusters(data_scaled, visualization=True)
-    classifier_comparison(framesToSmells)    
+    #data = scaleData(vectors)
+    #print(len(data))
+    #print(labels)
+    #dendrogram(data, labels)
+    #run_kmeans_determine_clusters(data, visualization=True, folderName='plots_site')
+    run_neural_net(framesToSmells)
+    #classifier_comparison(framesToSmells, crossValidation=10)    
 main()
 
 #sitesDir = checkArgs()
