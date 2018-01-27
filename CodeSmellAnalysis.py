@@ -29,6 +29,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import silhouette_samples, silhouette_score
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import classification_report
 
 import graphviz
 import matplotlib.pyplot as plt
@@ -37,12 +38,13 @@ import matplotlib.cm as cm
 from sklearn.cluster import AgglomerativeClustering
 import ete3
 
-smell_based = {'InlinedRules', 'EmbeddedRules', 'TooLongRules', 'SelectorswithIDandatleastoneclassorelement', 'PropertieswithValueEqualtoNoneorZero', 'UnusedProperties', 'PropertieswithHard-CodedValues', 'UniversalSelectors', 'TooSpecificSelectorsTypeII', 'TooSpecificSelectorsTypeI', 'DangerousSelectors', 'EmptyCatchRules', 'TooLongRules'}
-metric_based = {'ExternalRules', 'Effective', 'FileswithCSScode', 'LOC(CSS)', 'Ineffective', 'TotalDefinedCSSselectors', 'TotalDefinedCSSrules', 'Matched', 'TotalDefinedCSSProperties', '>UndefinedClasses', 'Unmatched', 'Ignored', 'IgnoredProperties'}
+smell_based = {'InlinedRules', 'EmbeddedRules', 'TooLongRules', 'SelectorswithIDandatleastoneclassorelement', 'PropertieswithValueEqualtoNoneorZero', 'SelectorswithInvalidSyntax', 'PropertieswithHard-CodedValues', 'UniversalSelectors', 'TooSpecificSelectorsTypeII', 'TooSpecificSelectorsTypeI', 'DangerousSelectors', 'EmptyCatchRules', 'TooLongRules'}
+metric_based = {'ExternalRules', 'Effective', 'FileswithCSScode', 'LOC(CSS)', 'Ineffective', 'TotalDefinedCSSselectors', 'TotalDefinedCSSrules', 'Matched', 'TotalDefinedCSSProperties', '>UndefinedClasses', 'Unmatched', 'Ignored', 'IgnoredProperties', 'UnusedProperties'}
 rule_based = {'InlinedRules', 'EmbeddedRules', 'ExternalRules', 'TooLongRules', 'TotalDefinedCSSrules', 'EmptyCatchRules'}
 selector_based = {'TooSpecificSelectorsTypeI', 'TooSpecificSelectorsTypeII', 'SelectorswithInvalidSyntax', 'DangerousSelectors', 'UniversalSelectors', 'TotalDefinedCSSselectors', 'Ignored', 'SelectorswithIDandatleastoneclassorelement', 'Matched', 'Effective', 'Unmatched', 'Ineffective', '>UndefinedClasses'}
 property_based = {'PropertieswithHard-CodedValues', 'PropertieswithValueEqualtoNoneorZero', 'TotalDefinedCSSProperties', 'UnusedProperties', 'IgnoredProperties'}
 file_based = {'FileswithCSScode', 'LOC(CSS)'}
+
 
 def checkArgs():
     if len(sys.argv) != 2:
@@ -92,11 +94,36 @@ def getFeaturesAndCorrespondingLabels_(framesToSmells):
             labels.append(framework)
     return np.array(features),np.array(labels)
 
-
-def outputLatexTable(framesToSmells):
+def outputPercentLatexTable(framesToSmells):
     smell_frame_avg = calcFrameworkAverages(framesToSmells)
     frameworks = sorted(list(list(smell_frame_avg.values())[0].keys()))
-    frameworks = frameworks[:4]
+    rows = []
+    numSubColumns = 1
+    for smell,frameToAvg in smell_frame_avg.items():
+        row = [smell]
+        for index,frame in enumerate(frameworks):
+            avgs = frameToAvg[frame]
+            row.extend([str(round(avgs['percent'] * 100, 2)) + '\%'])
+        rows.append(row)
+
+    column_structure = ['|c' for i in range(len(frameworks) * numSubColumns + 1)]
+    column_structure[-1] += '|'
+    table = "\\begin{table*}\n\\centering\n\\begin{tabular}{ " 
+    table += ''.join(column_structure) + " }"
+    #table += \n\\cline{2-" + str(len(frameworks) * numSubColumns + 1) + "}\n"
+    #table += "\multicolumn{1}{c}{} & "
+    #table += ' & '.join(["\multicolumn{" + str(numSubColumns) + "}{|c|}{" + frame + "}" for frame in frameworks])
+    table += '\n\\hline\nCode Smell & ' + ' & '.join(frameworks)
+    table += ' \\\\\n\\hline\n'
+    table += '\\\\\n'.join([' & '.join(row) for row in rows]) + ' \\\\\n\\hline\n'
+    table += '\\end{tabular}\n\\caption{}\n\\end{table*}\n'
+
+    return table
+
+def outputAveragesLatexTable(framesToSmells):
+    smell_frame_avg = calcFrameworkAverages(framesToSmells)
+    frameworks = sorted(list(list(smell_frame_avg.values())[0].keys()))
+    frameworks = frameworks[13:]
     rows = []
     numSubColumns = 3
     for smell,frameToAvg in smell_frame_avg.items():
@@ -114,7 +141,7 @@ def outputLatexTable(framesToSmells):
     table += "\multicolumn{1}{c}{} & "
     table += ' & '.join(["\multicolumn{" + str(numSubColumns) + "}{|c|}{" + frame + "}" for frame in frameworks])
     table += ' \\\\\n\\hline\nCode Smell & '
-    table += ' & '.join(['mean & median & std-dev & z-mean & \%' for frame in frameworks])
+    table += ' & '.join(['mean & std-dev & z-mean' for frame in frameworks])
     table += ' \\\\\n\\hline\n'
     table += '\\\\\n'.join([' & '.join(row) for row in rows]) + ' \\\\\n\\hline\n'
     table += '\\end{tabular}\n}\n\\caption{}\n\\end{table*}\n'
@@ -247,16 +274,19 @@ def run_kmeans(data, numClusters, visualization=False):
         visualize_kmeans(data_scaled, numClusters, 'Code Smell Cluster')
     return kmeans
 
-def run_kmeans_determine_clusters(data, minClusters=2, maxClusters=10, visualization=False, folderName='plots'):
+def run_kmeans_determine_clusters(data, labels, minClusters=2, maxClusters=10, visualization=False, folderName='plots', title=''):
     for n_clusters in range(minClusters, maxClusters+1):
         kmeans = KMeans(n_clusters=n_clusters)
         #print(data)
         kmeans.fit(data)
+        cluster_labels = kmeans.labels_
+        print('---', n_clusters, '---')
+        for label,cluster in zip(labels, cluster_labels):
+            print('label:', label, 'cluster:', cluster)
         if visualization:
-            labels = kmeans.labels_
             plot_silhouettes(data, kmeans, n_clusters, folderName)
-            visualize_kmeans(data, n_clusters, 'Framework Cluster', folderName)
-        silhouette_avg = metrics.silhouette_score(data, labels, metric='euclidean')
+            visualize_kmeans(data, n_clusters, title, folderName)
+        silhouette_avg = metrics.silhouette_score(data, cluster_labels, metric='euclidean')
         print('for {} clusters, avg silhouette score is: {}'.format(n_clusters, silhouette_avg))
 
 def plot_silhouettes(data, clusterer, n_clusters, folderName):
@@ -344,7 +374,7 @@ def plot_silhouettes(data, clusterer, n_clusters, folderName):
         ax2.scatter(c[0], c[1], marker='$%d$' % i, alpha=1,
             s=50, edgecolor='k')
 
-    ax2.set_title("The visualization of the PCS-reduced clustered data.")
+    ax2.set_title("The visualization of the PCA-reduced clustered data.")
     #ax2.set_xlabel("Feature space for the 1st feature")
     #ax2.set_ylabel("Feature space for the 2nd feature")
 
@@ -391,11 +421,10 @@ def run_decision_tree(framesToSmells, visualization=False):
 
 def run_neural_net(framesToSmells, precision_recall=False, crossValidation=None):
     features,labels = getLabeledData(framesToSmells)
-    print(labels)
     features = scaleData(features)
 
     features_train,features_test,labels_train,labels_test = train_test_split(
-            features, labels, test_size=0.1)
+            features, labels, test_size=0.33)
 
     clf = MLPClassifier(alpha=1)
     #clf.fit(scaleData(features_train), labels_train)
@@ -404,7 +433,9 @@ def run_neural_net(framesToSmells, precision_recall=False, crossValidation=None)
 
     if precision_recall:
         predict = clf.predict(features_test)
-        print('precision, recall, fscore, support:', precision_recall_fscore_support(predict, labels_test))
+        print('precision, recall, fscore, support:', precision_recall_fscore_support(labels_test,predict, average=None, labels=sorted(list(set(labels)))))
+        print('labels:', set(labels))
+        print(classification_report(labels_test, predict, sorted(list(set(labels)))))
 
     if crossValidation:
         clf_x = MLPClassifier(alpha=1)
@@ -428,7 +459,7 @@ def classifier_comparison(framesToSmells, crossValidation=None):
     data,labels = getLabeledData(framesToSmells)
     data = scaleData(data)
 
-    names = ["Nearest Neighbors", "Linear SVM", "RBF SVM", "Gaussian Process",
+    names = ["Nearest Neighbors", "Linear SVM", "RBF SVM", #"Gaussian Process",
              "Decision Tree", "Random Forest", "Neural Net", "AdaBoost",
              "Naive Bayes", "QDA"]
 
@@ -436,7 +467,7 @@ def classifier_comparison(framesToSmells, crossValidation=None):
         KNeighborsClassifier(3),
         SVC(kernel="linear", C=0.025),
         SVC(gamma=2, C=1),
-        GaussianProcessClassifier(1.0 * RBF(1.0)),
+        #GaussianProcessClassifier(1.0 * RBF(1.0)),
         DecisionTreeClassifier(max_depth=5),
         RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1),
         MLPClassifier(alpha=1),
@@ -613,29 +644,36 @@ def smell_groups(sitesDir):
 
 def main():
     sitesDir = checkArgs()
-    smell_groups(sitesDir)
-    #framesToSmells = loadCodeSmells(sitesDir)
+    #smell_groups(sitesDir)
+    framesToSmells = loadCodeSmells(sitesDir)
+    print(len(framesToSmells))
     #data = getUnlabeledData(framesToSmells)
-    #data,labels = getLabeledData(framesToSmells)
+    data,labels = getLabeledData(framesToSmells)
     #data = scaleData(data)
     #plot_silhouettes(data_scaled)
     #framesToSmells = getTestSmells()
     #smells = list(list(framesToSmells.values())[0].values())[0].keys()
     #print(smells)
     #meanTable(framesToSmells)
-    #print(outputLatexTable(framesToSmells))
+    #print(outputAveragesLatexTable(framesToSmells))
+    #print(outputPercentLatexTable(framesToSmells))
     #run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=True)
     #run_decision_tree(framesToSmells, visualization=False)
     #run_logistic_regression(framesToSmells)
     #averages = calcFrameworkAverages(framesToSmells)
-    #vectors,labels = get_smell_vectors(averages)
     #vectors,labels = get_framework_vectors(averages)
+    #vectors,labels = get_smell_vectors(averages)
     #data = scaleData(vectors)
     #print(len(data))
     #print(labels)
-    #dendrogram(data, labels)
-    #run_kmeans_determine_clusters(data, visualization=True, folderName='plots_site')
-    #run_neural_net(framesToSmells)
+    dendrogram(data, labels)
+    #print('clustering by site')
+    #run_kmeans_determine_clusters(data, labels, visualization=True, folderName='plots/plots_site', title='Site Clusters')
+    #print('clustering by framework')
+    #run_kmeans_determine_clusters(data, labels, visualization=True, folderName='plots/plots_frame', title='Framework Clusters')
+    #print('clustering by smells')
+    #run_kmeans_determine_clusters(data, labels, visualization=True, folderName='plots/plots_smell', title='Smell Clusters')
+    run_neural_net(framesToSmells, precision_recall=True, crossValidation=10)
     #classifier_comparison(framesToSmells, crossValidation=10)    
 main()
 
