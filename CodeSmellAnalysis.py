@@ -97,18 +97,19 @@ def getFeaturesAndCorrespondingLabels_(framesToSmells):
 def outputPercentLatexTable(framesToSmells):
     smell_frame_avg = calcFrameworkAverages(framesToSmells)
     frameworks = sorted(list(list(smell_frame_avg.values())[0].keys()))
+    #frameworks = frameworks[:]
     rows = []
     numSubColumns = 1
     for smell,frameToAvg in smell_frame_avg.items():
         row = [smell]
         for index,frame in enumerate(frameworks):
             avgs = frameToAvg[frame]
-            row.extend([str(round(avgs['percent'] * 100, 2)) + '\%'])
+            row.extend([str(round(avgs['percent'] * 100, 2))])
         rows.append(row)
 
     column_structure = ['|c' for i in range(len(frameworks) * numSubColumns + 1)]
     column_structure[-1] += '|'
-    table = "\\begin{table*}\n\\centering\n\\begin{tabular}{ " 
+    table = "\\begin{table*}\n\\centering\n\\begin{sideways}\n\\begin{tabular}{ " 
     table += ''.join(column_structure) + " }"
     #table += \n\\cline{2-" + str(len(frameworks) * numSubColumns + 1) + "}\n"
     #table += "\multicolumn{1}{c}{} & "
@@ -116,14 +117,14 @@ def outputPercentLatexTable(framesToSmells):
     table += '\n\\hline\nCode Smell & ' + ' & '.join(frameworks)
     table += ' \\\\\n\\hline\n'
     table += '\\\\\n'.join([' & '.join(row) for row in rows]) + ' \\\\\n\\hline\n'
-    table += '\\end{tabular}\n\\caption{}\n\\end{table*}\n'
+    table += '\\end{tabular}\n\\end{sideways}\n\\caption{The percentages of the website for a specific framework that contain at least one instance of the specified code smell.}\n\\label{tab:smell_percents}\n\\end{table*}\n'
 
     return table
 
 def outputAveragesLatexTable(framesToSmells):
     smell_frame_avg = calcFrameworkAverages(framesToSmells)
     frameworks = sorted(list(list(smell_frame_avg.values())[0].keys()))
-    frameworks = frameworks[13:]
+    frameworks = frameworks[15:]
     rows = []
     numSubColumns = 3
     for smell,frameToAvg in smell_frame_avg.items():
@@ -145,6 +146,40 @@ def outputAveragesLatexTable(framesToSmells):
     table += ' \\\\\n\\hline\n'
     table += '\\\\\n'.join([' & '.join(row) for row in rows]) + ' \\\\\n\\hline\n'
     table += '\\end{tabular}\n}\n\\caption{}\n\\end{table*}\n'
+
+    return table
+
+def outputMegaAveragesLatexTable(framesToSmells):
+    smell_frame_avg = calcFrameworkAverages(framesToSmells)
+    frameworks = sorted(list(list(smell_frame_avg.values())[0].keys()))
+    smellToZ = dict()
+    rows = []
+
+    for frame in frameworks:
+        means = [smell_frame_avg[smell][frame]['mean'] for smell in sorted(smell_frame_avg.keys())]
+        deviations = [smell_frame_avg[smell][frame]['standard_deviation'] for smell in sorted(smell_frame_avg.keys())]
+        z_scores = preprocessing.scale(means)
+
+        row = ['\multirow{3}{*}{' + frame + '}', '\multicolumn{1}{c|}{mean}']
+        means = [str(round(mean, 2)) for mean in means]
+        row.extend(means)
+        rows.append(' & '.join(row) + ' \\\\')
+        row = ['\multicolumn{1}{c|}{std-dev}']
+        deviations = [str(round(deviation, 2)) for deviation in deviations]
+        row.extend(deviations)
+        rows.append('& ' + ' & '.join(row) + ' \\\\')
+        row = ['\multicolumn{1}{c|}{z-score}']
+        z_scores = [str(round(z, 2)) for z in z_scores]
+        row.extend(z_scores)
+        rows.append('& ' + ' & '.join(row) + ' \\\\\n\\hline')
+
+    column_structure = ['c' for i in range(2 + len(smell_frame_avg.keys()))]
+    table = "\\begin{table}\n\\begin{sideways}\n\\resizebox{23cm}{!} {\n\\begin{tabular}{ " 
+    table += ''.join(column_structure) + " }\n"
+    table += "& & " + ' & '.join(['\\rot{90}{' + smell + '}' for smell in sorted(smell_frame_avg.keys())])
+    table += ' \\\\\n\\hline\n'
+    table += '\n'.join(rows)
+    table += '\n\\end{tabular}\n}\n\\end{sideways}\n\\caption{}\n\\label{}\n\\end{table}\n'
 
     return table
 
@@ -274,20 +309,88 @@ def run_kmeans(data, numClusters, visualization=False):
         visualize_kmeans(data_scaled, numClusters, 'Code Smell Cluster')
     return kmeans
 
-def run_kmeans_determine_clusters(data, labels, minClusters=2, maxClusters=10, visualization=False, folderName='plots', title=''):
+def run_kmeans_determine_clusters(data, labels, minClusters=2, maxClusters=10, visualization=False, latex_vector_plot=False, latex_site_plot=False, folderName='plots', title=''):
     for n_clusters in range(minClusters, maxClusters+1):
         kmeans = KMeans(n_clusters=n_clusters)
         #print(data)
         kmeans.fit(data)
         cluster_labels = kmeans.labels_
         print('---', n_clusters, '---')
+        clusterToFrame = defaultdict(list)
         for label,cluster in zip(labels, cluster_labels):
-            print('label:', label, 'cluster:', cluster)
+            clusterToFrame[cluster].append(label)
+        for cluster in clusterToFrame.keys():
+            print('cluster:', cluster)
+            for label in set(labels):
+                print('{}: {}'.format(label, clusterToFrame[cluster].count(label))) 
+        #print('label:', label, 'cluster:', cluster)
         if visualization:
             plot_silhouettes(data, kmeans, n_clusters, folderName)
             visualize_kmeans(data, n_clusters, title, folderName)
+        if latex_vector_plot or latex_site_plot:
+            reduced_data = PCA(n_components=2).fit_transform(data)
+            reduced_kmeans = KMeans(n_clusters=n_clusters)
+            reduced_kmeans.fit(reduced_data)
+            cluster_labels = reduced_kmeans.labels_
+            #print(reduced_data)
+            if latex_vector_plot:
+                print(output_latex_vector_plot(reduced_data, labels, cluster_labels))
+            else:
+                print(output_latex_site_plot(reduced_data, labels, cluster_labels, n_clusters, folderName))
+
         silhouette_avg = metrics.silhouette_score(data, cluster_labels, metric='euclidean')
         print('for {} clusters, avg silhouette score is: {}'.format(n_clusters, silhouette_avg))
+
+def output_latex_site_plot(points, labels, cluster_labels, n_clusters, folderName):
+    marks = ['*', 'square*', 'traingle*', 'pentagon*', 'oplus*', 'otimes*',
+        '-', 'x', '+', 'asterisk', 'star']
+    frames = list(set(labels))
+    plot = '''
+    \\begin{tikzpicture}
+    \\begin{axis}[enlargelimits=0.2]
+        \\addplot[
+          scatter,mark=\mark,
+          point meta=\\thisrow{color},
+          visualization depends on={value \\thisrow{mark} \\as \mark},
+    ]
+    table {plotdata/site_clusters.dat};
+    \end{axis}
+\end{tikzpicture}
+'''
+
+    with open('{}/site_clusters-{}.txt'.format(folderName, n_clusters), 'w') as f:
+        title = 'x y color mark'
+        lines = []
+        for point,label,cluster in zip(points, labels, cluster_labels):
+            lines.append('\n{} {} {} {}'.format(point[0], point[1], frames.index(label)+1, marks[cluster]))
+         
+        f.write(title + '\n'.join(random.sample(lines, len(lines) // 2)))
+
+    return plot
+
+def output_latex_vector_plot(points, labels, cluster_labels):
+    plot = '''
+    \\begin{tikzpicture}
+    \\begin{axis}[enlargelimits=0.2]
+        \\addplot[
+          scatter,mark=*,only marks,
+          point meta=\\thisrow{color},
+          nodes near coords*={\myvalue},
+          visualization depends on={value \\thisrow{myvalue} \\as \myvalue},
+    ]
+    table {
+    x y color myvalue
+    '''
+    for point,label,cluster in zip(points, labels, cluster_labels):
+        plot += '\n{} {} {} {}'.format(point[0], point[1], cluster+1, label)
+
+    plot += '''
+        };
+    \end{axis}
+\end{tikzpicture}
+'''
+    return plot
+
 
 def plot_silhouettes(data, clusterer, n_clusters, folderName):
     # Generating the sample data from make_blobs
@@ -364,19 +467,20 @@ def plot_silhouettes(data, clusterer, n_clusters, folderName):
     ax2.scatter(reduced_data[:, 0], reduced_data[:, 1], marker='.', s=30, lw=0, alpha=0.7,
         c=colors, edgecolor='k')
 
+
     # Labeling the clusters
     centers = kmeans.cluster_centers_
     # Draw white circles at cluster centers
     ax2.scatter(centers[:, 0], centers[:, 1], marker='o',
-        c="white", alpha=1, s=80, edgecolor='k')
+        c="white", alpha=1, s=400, edgecolor='k')
 
     for i, c in enumerate(centers):
         ax2.scatter(c[0], c[1], marker='$%d$' % i, alpha=1,
             s=50, edgecolor='k')
 
-    ax2.set_title("The visualization of the PCA-reduced clustered data.")
-    #ax2.set_xlabel("Feature space for the 1st feature")
-    #ax2.set_ylabel("Feature space for the 2nd feature")
+    ax2.set_title("PCA-Reduced Website Code Smells / Metrics")
+    ax2.set_xlabel("PCA 1")
+    ax2.set_ylabel("PCA 2")
 
     plt.suptitle(("Silhouette analysis for KMeans clustering on sample data "
           "with n_clusters = %d" % n_clusters),
@@ -433,8 +537,8 @@ def run_neural_net(framesToSmells, precision_recall=False, crossValidation=None)
 
     if precision_recall:
         predict = clf.predict(features_test)
-        print('precision, recall, fscore, support:', precision_recall_fscore_support(labels_test,predict, average=None, labels=sorted(list(set(labels)))))
-        print('labels:', set(labels))
+        #print('precision, recall, fscore, support:', precision_recall_fscore_support(labels_test,predict, average=None, labels=sorted(list(set(labels)))))
+        #print('labels:', set(labels))
         print(classification_report(labels_test, predict, sorted(list(set(labels)))))
 
     if crossValidation:
@@ -646,34 +750,35 @@ def main():
     sitesDir = checkArgs()
     #smell_groups(sitesDir)
     framesToSmells = loadCodeSmells(sitesDir)
-    print(len(framesToSmells))
+    #print(len(framesToSmells))
     #data = getUnlabeledData(framesToSmells)
-    data,labels = getLabeledData(framesToSmells)
+    #framesToSmells = getTestSmells()
+    #data,labels = getLabeledData(framesToSmells)
     #data = scaleData(data)
     #plot_silhouettes(data_scaled)
-    #framesToSmells = getTestSmells()
     #smells = list(list(framesToSmells.values())[0].values())[0].keys()
     #print(smells)
     #meanTable(framesToSmells)
     #print(outputAveragesLatexTable(framesToSmells))
     #print(outputPercentLatexTable(framesToSmells))
+    #print(outputMegaAveragesLatexTable(framesToSmells))
     #run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=True)
     #run_decision_tree(framesToSmells, visualization=False)
     #run_logistic_regression(framesToSmells)
-    #averages = calcFrameworkAverages(framesToSmells)
-    #vectors,labels = get_framework_vectors(averages)
+    averages = calcFrameworkAverages(framesToSmells)
+    vectors,labels = get_framework_vectors(averages)
     #vectors,labels = get_smell_vectors(averages)
-    #data = scaleData(vectors)
+    data = scaleData(vectors)
     #print(len(data))
     #print(labels)
     dendrogram(data, labels)
     #print('clustering by site')
-    #run_kmeans_determine_clusters(data, labels, visualization=True, folderName='plots/plots_site', title='Site Clusters')
+    #run_kmeans_determine_clusters(data, labels, visualization=True, latex_vector_plot=False, latex_site_plot=False, folderName='plots/plots_site', title='Site Clusters')
     #print('clustering by framework')
-    #run_kmeans_determine_clusters(data, labels, visualization=True, folderName='plots/plots_frame', title='Framework Clusters')
+    #run_kmeans_determine_clusters(data, labels, visualization=True, latex_plot=True, folderName='plots/plots_frame', title='Framework Clusters')
     #print('clustering by smells')
-    #run_kmeans_determine_clusters(data, labels, visualization=True, folderName='plots/plots_smell', title='Smell Clusters')
-    run_neural_net(framesToSmells, precision_recall=True, crossValidation=10)
+    #run_kmeans_determine_clusters(data, labels, visualization=True, latex_plot=True, folderName='plots/plots_smell', title='Smell Clusters')
+    #run_neural_net(framesToSmells, precision_recall=True, crossValidation=10)
     #classifier_comparison(framesToSmells, crossValidation=10)    
 main()
 
