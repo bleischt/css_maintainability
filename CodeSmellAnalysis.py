@@ -155,10 +155,31 @@ def outputMegaAveragesLatexTable(framesToSmells):
     smellToZ = dict()
     rows = []
 
+    mean_rows = []
+    deviation_rows = []
+    z_score_cols = []
+    z_score_rows = []
+    
     for frame in frameworks:
         means = [smell_frame_avg[smell][frame]['mean'] for smell in sorted(smell_frame_avg.keys())]
         deviations = [smell_frame_avg[smell][frame]['standard_deviation'] for smell in sorted(smell_frame_avg.keys())]
-        z_scores = preprocessing.scale(means)
+        mean_rows.append(means)
+        deviation_rows.append(deviations)
+
+    # z-scores have to be calcualted by smell which is a column on this table
+    # so need to restructure means into columns (line1) and then calc zscores (line2)
+    for index in range(len(smell_frame_avg.keys())):
+        means_by_smell = [means[index] for means in mean_rows]
+        z_score_cols.append(preprocessing.scale(means_by_smell))
+
+    # need to convert the zscore columns to rows now to print in the latex table
+    for index in range(len(frameworks)):
+        z_score_rows.append([scores[index] for scores in z_score_cols])
+
+    for index, frame in enumerate(frameworks):
+        means = mean_rows[index]
+        deviations = deviation_rows[index]
+        z_scores = z_score_rows[index]
 
         row = ['\multirow{3}{*}{' + frame + '}', '\multicolumn{1}{c|}{mean}']
         means = [str(round(mean, 2)) for mean in means]
@@ -761,17 +782,17 @@ def main():
     #meanTable(framesToSmells)
     #print(outputAveragesLatexTable(framesToSmells))
     #print(outputPercentLatexTable(framesToSmells))
-    #print(outputMegaAveragesLatexTable(framesToSmells))
+    print(outputMegaAveragesLatexTable(framesToSmells))
     #run_kmeans(framesToSmells, len(framesToSmells.keys()), visualization=True)
     #run_decision_tree(framesToSmells, visualization=False)
     #run_logistic_regression(framesToSmells)
-    averages = calcFrameworkAverages(framesToSmells)
-    vectors,labels = get_framework_vectors(averages)
+    #averages = calcFrameworkAverages(framesToSmells)
+    #vectors,labels = get_framework_vectors(averages)
     #vectors,labels = get_smell_vectors(averages)
-    data = scaleData(vectors)
+    #data = scaleData(vectors)
     #print(len(data))
     #print(labels)
-    dendrogram(data, labels)
+    #dendrogram(data, labels)
     #print('clustering by site')
     #run_kmeans_determine_clusters(data, labels, visualization=True, latex_vector_plot=False, latex_site_plot=False, folderName='plots/plots_site', title='Site Clusters')
     #print('clustering by framework')
